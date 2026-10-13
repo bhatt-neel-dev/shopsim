@@ -130,6 +130,19 @@ simulated: the service answers 503 and stops all telemetry.
 
 Tests: `pytest` (32 tests, in-process, no network).
 
+### Seeing traces in Motadata APM
+
+Motadata only stores spans for services registered under **Settings → APM → Application
+Registration**. Until then, the collector accepts the spans and Motadata drops them without an error.
+Register `shopsim-catalog`, `shopsim-orders` and `shopsim-payments` as Python, bare metal, manual
+instrumentation, against the agent whose collector (`:4318`) receives the traces. If you
+register them through the API, send every field the UI sends: `service.deployment.type: BARE_METAL`,
+`service.trace.state: yes`, `service.trace.attributes`, `custom.trace.attributes` and
+`service.trace.notify.required`. A registration with only the name, type and agent stayed
+*Inactive* on 8.2.9 and stored nothing. Set
+`OTEL_RESOURCE_ATTRIBUTES=trace.business.service=<name>` in `.env` to group the three services
+under a business service.
+
 ## Settings (environment)
 
 | Variable | Default | |
