@@ -30,8 +30,9 @@ DEVICES = {
     "mobile": ["iPhone 14", "iPhone 13 Mini", "Pixel 7", "Galaxy S9+"],
     "tablet": ["iPad Pro 11", "iPad (gen 7)", "Galaxy Tab S4"],
 }
-# Where sessions "come from": a public range per country (for geo lookups on X-Forwarded-For),
-# plus the browser locale and time zone to match.
+# Where sessions "come from": public ranges per country (for geo lookups on X-Forwarded-For), plus
+# the browser locale and time zone to match. Motadata keeps a record per RUM client IP, so each
+# country uses a small fixed pool of addresses (IPS_PER_COUNTRY) rather than a fresh one per session.
 GEO = [
     ("US", 30, "en-US", "America/Chicago", ["23.20.0.0/14", "98.137.0.0/16", "72.229.0.0/16"]),
     ("IN", 20, "en-IN", "Asia/Kolkata", ["49.36.0.0/14", "117.192.0.0/10", "106.192.0.0/11"]),
@@ -44,6 +45,7 @@ GEO = [
     ("SG", 4, "en-SG", "Asia/Singapore", ["116.86.0.0/15"]),
     ("CA", 4, "en-CA", "America/Toronto", ["24.48.0.0/14"]),
 ]
+IPS_PER_COUNTRY = 3
 SEARCH_WORDS = ["wireless", "pro", "smart", "leather", "kit", "air", "mini", "organic", "max", "set", "lamp", "shoes"]
 
 
@@ -54,9 +56,17 @@ def weighted(rng: random.Random, weights: dict[str, float], default: str) -> str
     return rng.choices([k for k, _ in items], weights=[w for _, w in items])[0]
 
 
-def public_ip(rng: random.Random, cidrs: list[str]) -> str:
-    net = ipaddress.ip_network(rng.choice(cidrs))
-    return str(net.network_address + rng.randint(1, net.num_addresses - 2))
+def ip_pool(country: str, cidrs: list[str], size: int = IPS_PER_COUNTRY) -> list[str]:
+    """The same few public addresses for a country on every run (seeded by the country code)."""
+    rng = random.Random(f"shopsim-geo-{country}")
+    pool = []
+    for i in range(size):
+        net = ipaddress.ip_network(cidrs[i % len(cidrs)])
+        pool.append(str(net.network_address + rng.randint(1, net.num_addresses - 2)))
+    return pool
+
+
+IP_POOLS = {country: ip_pool(country, cidrs) for country, _, _, _, cidrs in GEO}
 
 
 class JourneyFailed(Exception):
@@ -286,12 +296,12 @@ class Shoppers:
         fe, rng = self.fe, self.rng
         journey = weighted(rng, fe.journeys, "browse")
         device = weighted(rng, fe.devices, "desktop")
-        country, _, locale, tz, cidrs = rng.choices(GEO, weights=[g[1] for g in GEO])[0]
+        country, _, locale, tz, _ = rng.choices(GEO, weights=[g[1] for g in GEO])[0]
         descriptor = dict(pw.devices[rng.choice(DEVICES[device])])
         descriptor.pop("default_browser_type", None)
         options = {**descriptor, "locale": locale, "timezone_id": tz, "ignore_https_errors": True}
         if fe.geo_spoof:
-            options["extra_http_headers"] = {"X-Forwarded-For": public_ip(rng, cidrs)}
+            options["extra_http_headers"] = {"X-Forwarded-For": rng.choice(IP_POOLS[country])}
         for table, key in ((self.by_journey, journey), (self.by_device, device), (self.by_country, country)):
             table[key] = table.get(key, 0) + 1
         self.counters["started"] += 1
