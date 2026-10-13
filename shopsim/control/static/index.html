@@ -450,7 +450,8 @@ function buildPresets() {
 function renderMeta() {
   const m = ST.meta;
   $("#dest").innerHTML = [
-    ["Traces + metrics", `OTLP/HTTP ${esc(m.otlp_endpoint)}`], ["Logs (syslog)", `UDP ${esc(m.syslog)}`],
+    ["Traces", `OTLP/HTTP ${esc(m.otlp_traces_endpoint)}`], ["Metrics", `OTLP/HTTP ${esc(m.otlp_endpoint)}/v1/metrics`],
+    ["Logs (syslog)", `UDP ${esc(m.syslog)}`],
     ["Logs (files)", `${esc(m.log_dir)}/&lt;service&gt;.log`], ["Service down", m.docker ? "stops the container (real outage)" : `simulated: ${esc(m.docker_reason)}`],
     ["Burn caps", `${m.max_burn_cores} cores · ${m.max_burn_mb} MB per service`],
   ].map(([a, b]) => `<tr><td class="muted">${a}</td><td><code>${b}</code></td></tr>`).join("");

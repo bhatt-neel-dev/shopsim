@@ -79,8 +79,9 @@ def create_service_app(service: str, module, transports: dict[str, httpx.AsyncBa
     async def lifespan(app: FastAPI):
         if settings_mod.settings.background:
             background.start()
-        logger.info("%s %s started (OTLP %s, syslog %s:%s)", telemetry.service_name, VERSION, s.otlp_endpoint,
-                    s.syslog_host, s.syslog_port, extra={"fields": {"event": "service.started"}})
+        logger.info("%s %s started (traces %s, metrics %s, syslog %s:%s)", telemetry.service_name, VERSION,
+                    s.otlp_traces_endpoint, s.otlp_endpoint, s.syslog_host, s.syslog_port,
+                    extra={"fields": {"event": "service.started"}})
         yield
         logger.info("%s stopping", telemetry.service_name, extra={"fields": {"event": "service.stopping"}})
         await background.stop()

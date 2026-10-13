@@ -253,6 +253,7 @@ def create_app(transports: dict[str, httpx.AsyncBaseTransport] | None = None) ->
                         "dropped": traffic.stats.dropped, "max_total_rps": s.max_total_rps},
             "events": list(store.events)[:60],
             "meta": {"version": VERSION, "otlp_endpoint": s.otlp_endpoint,
+                     "otlp_traces_endpoint": s.otlp_traces_endpoint,
                      "syslog": f"{s.syslog_host}:{s.syslog_port}", "log_dir": s.log_dir,
                      "environment": s.environment, "hostname": s.hostname,
                      "docker": docker.available, "docker_reason": docker.reason, "down_mode": store.down_mode,

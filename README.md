@@ -135,6 +135,7 @@ Tests: `pytest` (32 tests, in-process, no network).
 | Variable | Default | |
 |---|---|---|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://127.0.0.1:4318` | OTLP/HTTP base URL (`/v1/traces`, `/v1/metrics`, `/v1/logs`) |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | `<base>/v1/traces` | full URL to send traces elsewhere (compose: `OTLP_TRACES_ENDPOINT` in `.env`) |
 | `SHOPSIM_SYSLOG_HOST` / `_PORT` | `127.0.0.1` / `514` | syslog target (UDP) |
 | `SHOPSIM_LOG_DIR` | `/var/log/shopsim` | JSON log files |
 | `SHOPSIM_ENV` | `lab` | `deployment.environment` |

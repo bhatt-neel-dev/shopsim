@@ -24,6 +24,8 @@ class Settings:
         "payments": _env("SHOPSIM_PAYMENTS_URL", "http://127.0.0.1:8183"),
     })
     otlp_endpoint: str = field(default_factory=lambda: _env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318"))
+    # Full URL (OTel convention). Lets traces go to a different collector than metrics/logs.
+    otlp_traces_endpoint: str = field(default_factory=lambda: _env("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", ""))
     # otlp | memory (tests) | none
     exporters: str = field(default_factory=lambda: _env("SHOPSIM_EXPORTERS", "otlp"))
     metric_interval_s: float = field(default_factory=lambda: float(_env("SHOPSIM_METRIC_INTERVAL_S", "10")))
@@ -42,6 +44,10 @@ class Settings:
     max_burn_mb: float = field(default_factory=lambda: float(_env("SHOPSIM_MAX_BURN_MB", "300")))
     poll_interval_s: float = field(default_factory=lambda: float(_env("SHOPSIM_POLL_INTERVAL_S", "2")))
     background: bool = field(default_factory=lambda: _env("SHOPSIM_BACKGROUND", "true").lower() == "true")
+
+    def __post_init__(self):
+        if not self.otlp_traces_endpoint:
+            self.otlp_traces_endpoint = f"{self.otlp_endpoint.rstrip('/')}/v1/traces"
 
 
 settings = Settings()

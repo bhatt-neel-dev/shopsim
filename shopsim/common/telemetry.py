@@ -139,7 +139,7 @@ def init_telemetry(service: str, runtime) -> Telemetry:
 
         base = s.otlp_endpoint.rstrip("/")
         tracer_provider.add_span_processor(BatchSpanProcessor(
-            OTLPSpanExporter(endpoint=f"{base}/v1/traces", timeout=5),
+            OTLPSpanExporter(endpoint=s.otlp_traces_endpoint, timeout=5),
             max_queue_size=20_000, max_export_batch_size=512, schedule_delay_millis=2000))
         readers.append(PeriodicExportingMetricReader(
             ToggleMetricExporter(OTLPMetricExporter(endpoint=f"{base}/v1/metrics", timeout=5), runtime),
