@@ -21,6 +21,7 @@ from shopsim import settings as settings_mod
 from shopsim.config import (
     ERROR_TYPES,
     GAUGES,
+    JS_ERRORS,
     LEVELS,
     METHODS,
     SERVICES,
@@ -182,6 +183,12 @@ def create_app(transports: dict[str, httpx.AsyncBaseTransport] | None = None) ->
     async def reset_config():
         return store.reset_config().model_dump(mode="json")
 
+    @app.post("/api/rum/report", include_in_schema=False)
+    async def rum_report(report: dict):
+        """The shoppers post their counters here every few seconds."""
+        store.rum_report = {**report, "received_at": time.time()}
+        return {"ok": True}
+
     @app.post("/api/services/{service}/state")
     async def set_state(service: str, body: StateIn):
         if service not in SERVICES:
@@ -226,7 +233,9 @@ def create_app(transports: dict[str, httpx.AsyncBaseTransport] | None = None) ->
     async def catalogue():
         return {"services": SERVICES, "methods": METHODS, "levels": LEVELS,
                 "states": ["up", "degraded", "down", "flapping"], "error_types": ERROR_TYPES, "gauges": GAUGES,
-                "spike_kinds": SPIKE_KINDS,
+                "spike_kinds": SPIKE_KINDS, "js_errors": JS_ERRORS,
+                "journeys": ["browse", "search", "buy", "abandon", "account"],
+                "devices": ["desktop", "mobile", "tablet"],
                 "presets": [{"name": n, "description": d} for n, (d, _) in PRESETS.items()]}
 
     @app.get("/api/status")
@@ -246,9 +255,14 @@ def create_app(transports: dict[str, httpx.AsyncBaseTransport] | None = None) ->
                 "stats": traffic.stats.snapshot(svc, now),
                 "series": list(traffic.stats.series[svc]),
             }
+        report = store.rum_report or {}
+        web_detail = health["web"]["detail"] if isinstance(health["web"]["detail"], dict) else {}
+        rum = {"effective": store.effective("web", now).frontend.model_dump(mode="json"),
+               "shoppers": report, "shoppers_age_s": round(now - report["received_at"], 1) if report else None,
+               "relay": web_detail.get("rum", {})}
         return {
             "now": now, "version": store.version, "config": store.config.model_dump(mode="json"),
-            "spikes": _spikes(store), "services": services,
+            "spikes": _spikes(store), "services": services, "rum": rum,
             "traffic": {"target_rps": round(sum(rates.values()), 2), "inflight": traffic.inflight,
                         "dropped": traffic.stats.dropped, "max_total_rps": s.max_total_rps},
             "events": list(store.events)[:60],

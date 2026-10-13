@@ -25,7 +25,10 @@ class Downstream:
                                         limits=httpx.Limits(max_connections=200, max_keepalive_connections=50))
 
     async def call(self, method: str, path: str, *, route: str | None = None, json: dict | None = None,
-                   params: dict | None = None, user_headers: dict | None = None) -> httpx.Response:
+                   params: dict | None = None, user_headers: dict | None = None, content: bytes | None = None,
+                   raise_5xx: bool = True) -> httpx.Response:
+        """``raise_5xx=False`` hands a 5xx back to the caller (a proxy passes it on) instead of
+        raising DependencyError; the client span is marked failed either way."""
         ctx = self.ctx
         route = route or path
         with ctx.tracer.start_as_current_span(f"{method} {route}", kind=SpanKind.CLIENT, attributes={
@@ -41,7 +44,8 @@ class Downstream:
             outcome = "ok"
             try:
                 await faults.checkpoint(ctx, "downstream")
-                resp = await self.client.request(method, path, json=json, params=params, headers=headers)
+                resp = await self.client.request(method, path, json=json, params=params, headers=headers,
+                                                 content=content)
             except ConnectionResetError as exc:
                 outcome = "reset"
                 raise DependencyError(f"{self.peer}: connection reset by peer during {method} {route}") from exc
@@ -59,6 +63,8 @@ class Downstream:
             span.set_attribute("http.status_code", resp.status_code)
             if resp.status_code >= 500:
                 span.set_status(Status(StatusCode.ERROR, f"HTTP {resp.status_code}"))
+                if not raise_5xx:
+                    return resp
                 try:
                     detail = resp.json().get("message", "")
                 except ValueError:

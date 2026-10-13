@@ -2,7 +2,8 @@ name: shopsim
 
 # Host networking: services reach each other, the OTLP endpoint and syslog on 127.0.0.1, and
 # the host name shows up as host.name on all telemetry.
-# One image for all four: `control` builds it, the services reuse it (never pulled).
+# One image for control and the four services: `control` builds it, the others reuse it (never
+# pulled). The shoppers (headless Chromium) have their own image.
 x-service: &service
   image: shopsim:latest
   pull_policy: never
@@ -58,6 +59,41 @@ services:
     <<: *service
     container_name: shopsim-payments
     command: ["payments"]
+
+  # The storefront: web pages with the Motadata RUM SDK + the API behind them (port 8184).
+  web:
+    <<: *service
+    container_name: shopsim-web
+    command: ["web"]
+    environment:
+      <<: *env
+      RUM_INTAKE_URL: ${RUM_INTAKE_URL:-}
+      RUM_APPLICATION_ID: ${RUM_APPLICATION_ID:-}
+      RUM_CLIENT_TOKEN: ${RUM_CLIENT_TOKEN:-}
+      RUM_SERVICE: ${RUM_SERVICE:-ShopSim Storefront}
+      RUM_VERSION: ${RUM_VERSION:-}
+
+  # Virtual shoppers: headless browsers that use the storefront like real visitors.
+  shoppers:
+    build:
+      context: .
+      dockerfile: Dockerfile.shoppers
+    image: shopsim-shoppers:latest
+    pull_policy: build
+    container_name: shopsim-shoppers
+    command: ["shoppers"]
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      SHOPSIM_CONTROL_URL: http://127.0.0.1:8180
+      SHOPSIM_STOREFRONT_URL: ${STOREFRONT_URL:-http://127.0.0.1:8184}
+      SHOPSIM_MAX_SHOPPERS: ${SHOPSIM_MAX_SHOPPERS:-3}
+    shm_size: 512m
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    mem_limit: 1200m
+    cpus: 2
 
 volumes:
   shopsim-data:

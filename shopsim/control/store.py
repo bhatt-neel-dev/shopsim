@@ -44,6 +44,7 @@ class Store:
         self.events: deque[dict] = deque(maxlen=300)
         self.version = 0
         self.down_mode = "container"
+        self.rum_report: dict = {}  # latest counters from the shoppers (not persisted)
         self.on_event = None  # callable(entry) - the app logs events to stdout
         self._load()
 

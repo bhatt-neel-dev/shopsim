@@ -1,0 +1,4 @@
+# The shoppers image: headless Chromium driven by Playwright (no web framework needed).
+playwright==1.62.0
+httpx==0.28.1
+pydantic==2.14.1

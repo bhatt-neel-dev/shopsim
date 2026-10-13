@@ -3,8 +3,10 @@
 .idea
 .pytest_cache
 **/__pycache__
-logs
-data
-tests
-*.md
+*.pyc
 .env
+data
+logs
+tests
+shopsim/storefront/vendor
+*.md

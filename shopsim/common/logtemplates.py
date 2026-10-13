@@ -114,6 +114,40 @@ TEMPLATES: dict[str, dict[str, list]] = {
             lambda r: ("Primary card vault unreachable: failing over to secondary region", {"event": "vault.failover"}),
         ],
     },
+    "web": {
+        "DEBUG": [
+            lambda r: (f"Rendered product grid shell in {r.uniform(0.4, 6):.1f}ms ({r.randint(8, 48)} tiles)",
+                       {"event": "ssr.render"}),
+            lambda r: (f"Edge cache HIT /api/catalog/products?category={r.choice(list(CATEGORIES))}",
+                       {"event": "edge.cache_hit"}),
+            lambda r: (f"Session cookie refreshed (ttl={r.choice([1800, 3600, 7200])}s)", {"event": "session.refresh"}),
+        ],
+        "INFO": [
+            lambda r: (f"Feature flag 'new-checkout' served to {r.randint(5, 60)}% of sessions",
+                       {"event": "flags.evaluated"}),
+            lambda r: (f"Sitemap rebuilt: {r.randint(800, 6000)} URLs", {"event": "sitemap.rebuilt"}),
+            lambda r: (f"CDN purge completed for {r.randint(1, 40)} asset(s)", {"event": "cdn.purge"}),
+            lambda r: (f"A/B experiment 'hero-banner-{r.choice('ABC')}' enrolled {r.randint(10, 400)} visitors",
+                       {"event": "experiment.enrolled"}),
+        ],
+        "WARNING": [
+            lambda r: (f"Slow upstream: catalog answered in {r.randint(800, 4000)}ms (budget 500ms)",
+                       {"event": "bff.slow_upstream"}),
+            lambda r: (f"Bot traffic throttled: {r.randint(20, 400)} requests from {r.randint(2, 30)} IPs",
+                       {"event": "bot.throttled"}),
+            lambda r: (f"Cart {r.randint(10**5, 10**6)} older than 30 days purged with {r.randint(1, 6)} item(s)",
+                       {"event": "cart.purged"}),
+        ],
+        "ERROR": [
+            lambda r: ("Recommendation widget timed out; rendered page without it", {"event": "widget.timeout"}),
+            lambda r: (f"CSP violation reported: script-src blocked {r.choice(['cdn.ads.example', 'tag.vendor.io'])}",
+                       {"event": "csp.violation"}),
+            lambda r: ("Checkout feature flag service unreachable; using last known flags", {"event": "flags.error"}),
+        ],
+        "CRITICAL": [
+            lambda r: ("Storefront asset manifest missing: pages may fail to load", {"event": "assets.missing"}),
+        ],
+    },
 }
 
 

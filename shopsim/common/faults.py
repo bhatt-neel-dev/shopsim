@@ -200,7 +200,8 @@ class FaultMiddleware:
         self.ctx = ctx
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope["path"].startswith(_SKIP_PATHS):
+        if scope["type"] != "http" or scope["path"].startswith(_SKIP_PATHS) or (
+                self.ctx.fault_paths and not scope["path"].startswith(self.ctx.fault_paths)):
             await self.app(scope, receive, send)
             return
         ctx = self.ctx

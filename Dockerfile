@@ -8,8 +8,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
+COPY deploy/fetch_rum_sdk.py /tmp/fetch_rum_sdk.py
 COPY shopsim ./shopsim
+# The storefront serves the Motadata RUM browser SDK itself (pinned, integrity-checked).
+RUN python /tmp/fetch_rum_sdk.py /app/shopsim/storefront/vendor
 
-# One image, four roles: control | catalog | orders | payments
+# One image, five roles: control | catalog | orders | payments | web
 ENTRYPOINT ["python", "-m", "shopsim"]
 CMD ["control"]

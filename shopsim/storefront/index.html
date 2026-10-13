@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShopSim Store</title>
+<link rel="stylesheet" href="/static/app.css">
+<script>window.SHOPSIM = __SHOPSIM_CONFIG__;</script>
+__RUM_TAG__
+</head>
+<body>
+<header class="top">
+  <a href="/" data-link class="logo" data-testid="home-link">Shop<span>Sim</span></a>
+  <form class="search" data-testid="search-form" role="search">
+    <input type="search" name="q" placeholder="Search products" aria-label="Search products" data-testid="search-input">
+    <button type="submit">Search</button>
+  </form>
+  <nav class="links">
+    <a href="/orders" data-link data-testid="orders-link">Orders</a>
+    <a href="/account" data-link data-testid="account-link" id="account-link">Sign in</a>
+    <a href="/cart" data-link data-testid="cart-link" class="cart-link">Cart <b id="cart-count">0</b></a>
+  </nav>
+</header>
+<nav class="cats" id="cats" aria-label="Categories"></nav>
+<div id="notice" role="status"></div>
+<main id="app" aria-live="polite"></main>
+<footer class="foot">ShopSim demo store · every page view, click and API call is monitored (RUM + APM)</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

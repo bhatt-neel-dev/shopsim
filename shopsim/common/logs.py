@@ -1,5 +1,6 @@
 """Structured JSON logs with trace correlation, shipped to stdout, a rotating file, syslog and
-(optionally) OTLP. Each destination can be switched on and off at runtime from the control panel.
+(optionally) OTLP, and attached to the active span as events. Each destination can be switched on
+and off at runtime from the control panel.
 """
 from __future__ import annotations
 
@@ -105,6 +106,30 @@ class SyslogFormatter(JsonFormatter):
         return f"{stamp} {self.host} {self.service_name}[{record.process}]: {super().format(record)}"
 
 
+class SpanEventHandler(logging.Handler):
+    """Adds each log line to the span it was written under, as a ``log`` event.
+
+    Trace backends show span events inside the trace, so the logs of a request sit next to its
+    spans. The stack trace is left out: a failing span already carries it as an exception event.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        span = trace.get_current_span()
+        if not span.is_recording():
+            return
+        try:
+            attrs = {"log.severity": record.levelname, "log.message": record.getMessage(),
+                     "log.logger": record.name}
+            for key, value in (getattr(record, "fields", None) or {}).items():
+                if value is not None:
+                    attrs[f"log.{key}"] = value if isinstance(value, _PRIMITIVE) else str(value)
+            if record.exc_info and record.exc_info[1] is not None:
+                attrs["log.error.type"] = record.exc_info[0].__name__
+            span.add_event("log", attrs)
+        except Exception:  # noqa: BLE001 - logging must never break the request
+            self.handleError(record)
+
+
 def _otlp_handler(logger_provider, runtime):
     from opentelemetry.sdk._logs import LoggingHandler
 
@@ -168,6 +193,10 @@ def init_logging(service: str, runtime, telemetry) -> logging.Logger:
     syslog.setFormatter(SyslogFormatter(service_name))
     syslog.addFilter(ToggleFilter(runtime, "logs_syslog"))
     logger.addHandler(syslog)
+
+    span_events = SpanEventHandler()
+    span_events.addFilter(ToggleFilter(runtime, "log_span_events"))
+    logger.addHandler(span_events)
 
     if telemetry.logger_provider is not None:
         logger.addHandler(_otlp_handler(telemetry.logger_provider, runtime))

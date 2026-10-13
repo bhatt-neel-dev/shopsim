@@ -64,14 +64,33 @@ def _chaos_monkey(store) -> None:
                               start_in_s=300, name="Chaos: outage"))
 
 
+def _bad_release(store) -> None:
+    store.add_spike(SpikeSpec(kind="js_errors", target="web", value=0.6, duration_s=600,
+                              name="Bad release: JS errors on 60% of page views"))
+    store.add_spike(SpikeSpec(kind="slow_frontend", target="web", value=1200, duration_s=600))
+    store.add_spike(SpikeSpec(kind="error_rate", target="web", value=0.25, error_type="exception", duration_s=600,
+                              name="Bad release: storefront API exceptions"))
+
+
+def _slow_frontend(store) -> None:
+    store.add_spike(SpikeSpec(kind="slow_frontend", target="web", value=2500, duration_s=600,
+                              name="Slow pages: 2.5s long tasks + late LCP"))
+    store.add_spike(SpikeSpec(kind="broken_assets", target="web", value=0.3, duration_s=600))
+    store.add_spike(SpikeSpec(kind="latency", target="web", value=600, duration_s=600))
+
+
+def _storefront_outage(store) -> None:
+    store.add_spike(SpikeSpec(kind="service_down", target="web", duration_s=180, name="Storefront outage"))
+
+
 def _all_up(store) -> None:
     store.patch_config({"services": {s: {"state": "up"} for s in SERVICES}})
 
 
 PRESETS = {
     "normal": ("Healthy baseline: defaults restored, every spike cancelled, all services up", _normal),
-    "black_friday": ("15 min: traffic x6, +250ms orders latency, CPU 88%, queue backlog, 15% card declines",
-                     _black_friday),
+    "black_friday": ("15 min: traffic and shoppers x6, +250ms orders latency, CPU 88%, queue backlog, "
+                     "15% card declines", _black_friday),
     "payment_outage": ("10 min: payments gateway timeouts at 80% + ERROR log storm", _payment_outage),
     "slow_db": ("10 min: +900ms DB latency on catalog and orders, DB pool near exhaustion", _slow_db),
     "log_storm": ("5 min: 300 ERROR + 200 WARNING lines/s on every service", _log_storm),
@@ -82,5 +101,10 @@ PRESETS = {
     "flapping_payments": ("payments flaps: 30s down / 60s up until set back to Up", _flapping_payments),
     "chaos_monkey": ("Recurring random incidents: error bursts, latency and short outages on random services",
                      _chaos_monkey),
+    "bad_release": ("10 min: JS errors on 60% of page views, slow pages, 25% storefront API exceptions",
+                    _bad_release),
+    "slow_frontend": ("10 min: 2.5s long tasks and late LCP, 30% broken images, +600ms storefront API",
+                      _slow_frontend),
+    "storefront_outage": ("Storefront (web) container down for 3 min: shoppers' pages fail", _storefront_outage),
     "all_up": ("Set every service back to Up (keeps spikes)", _all_up),
 }

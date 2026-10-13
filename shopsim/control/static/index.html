@@ -22,6 +22,14 @@ header h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
 header h1 span { color: var(--muted); font-weight: 400; }
 main { padding: 16px 20px 40px; max-width: 1500px; margin: 0 auto; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
 .grid3 { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid4 { display: grid; gap: 16px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1400px) { .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .grid4 { grid-template-columns: minmax(0, 1fr); } }
+.stats.wide { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+.weights { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px 10px; }
+.weights label { display: block; font-size: 12px; color: var(--muted); }
+a.link { color: var(--accent); }
+#dest code, #rum-meta td { overflow-wrap: anywhere; }
 .grid2 { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 1100px) { .grid3 { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 900px) { .grid2 { grid-template-columns: minmax(0, 1fr); } main { padding: 12px 16px 32px; } header { padding: 10px 16px; } }
@@ -108,7 +116,39 @@ code { font-family: var(--mono); font-size: 12px; }
 </header>
 
 <main>
-  <section class="grid3" id="services"></section>
+  <section class="grid4" id="services"></section>
+
+  <section class="card" id="rum">
+    <h2>Storefront &amp; RUM <span class="right"><a class="link" id="store-link" target="_blank" rel="noopener">open the storefront ↗</a></span></h2>
+    <div class="muted" id="rum-note" style="font-size:13px;min-height:18px"></div>
+    <div class="stats wide">
+      <div class="stat"><div class="v" id="rum-active">-</div><div class="l">browsers now</div></div>
+      <div class="stat"><div class="v" id="rum-started">-</div><div class="l">sessions started</div></div>
+      <div class="stat"><div class="v" id="rum-completed">-</div><div class="l">completed</div></div>
+      <div class="stat" id="rum-failbox"><div class="v" id="rum-failed">-</div><div class="l">failed</div></div>
+      <div class="stat"><div class="v" id="rum-skipped">-</div><div class="l">skipped (cap)</div></div>
+      <div class="stat"><div class="v" id="rum-views">-</div><div class="l">page views</div></div>
+      <div class="stat"><div class="v" id="rum-beacons">-</div><div class="l">beacons → Motadata</div></div>
+      <div class="stat"><div class="v" id="rum-promoted">-</div><div class="l">views completed</div></div>
+    </div>
+    <div class="chips" id="rum-chips"></div>
+    <div class="grid2" style="margin-top:10px">
+      <div>
+        <div class="sub">Shoppers</div>
+        <label class="toggle"><input type="checkbox" data-path="rum.enabled"> Shoppers on</label>
+        <div id="rum-sliders-shoppers"></div>
+        <div class="sub">Journey mix (weights)</div><div class="weights" id="rum-journeys"></div>
+        <div class="sub">Devices (weights)</div><div class="weights" id="rum-devices"></div>
+        <label class="toggle"><input type="checkbox" data-path="rum.geo_spoof"> Spread sessions over countries (X-Forwarded-For)</label>
+      </div>
+      <div>
+        <div class="sub">Frontend faults</div>
+        <div id="rum-sliders-faults"></div>
+        <div class="sub">JS error types (weights)</div><div class="weights" id="rum-errtypes"></div>
+      </div>
+    </div>
+    <table style="margin-top:8px"><tbody id="rum-meta"></tbody></table>
+  </section>
 
   <section class="grid2">
     <div class="card">
@@ -116,7 +156,7 @@ code { font-family: var(--mono); font-size: 12px; }
       <form id="spike-form" class="form" autocomplete="off">
         <div><label>Kind</label><select name="kind"></select></div>
         <div><label>Target</label><select name="target"><option value="all">all services</option><option value="random">random service</option>
-          <option value="catalog">catalog</option><option value="orders">orders</option><option value="payments">payments</option></select></div>
+          <option value="catalog">catalog</option><option value="orders">orders</option><option value="payments">payments</option><option value="web">web (storefront)</option></select></div>
         <div data-for="value"><label id="value-label">Value</label><input type="number" name="value" step="any"></div>
         <div data-for="metric"><label>Metric</label><select name="metric"></select></div>
         <div data-for="level"><label>Log level</label><select name="level"></select></div>
@@ -164,6 +204,7 @@ code { font-family: var(--mono); font-size: 12px; }
         <label class="toggle"><input type="checkbox" data-path="telemetry.logs_file"> Logs → file</label>
         <label class="toggle"><input type="checkbox" data-path="telemetry.logs_stdout"> Logs → stdout</label>
         <label class="toggle"><input type="checkbox" data-path="telemetry.logs_otlp"> Logs → OTLP</label>
+        <label class="toggle" title="Each request's log lines are added to its span as 'log' events, so they show inside the trace"><input type="checkbox" data-path="telemetry.log_span_events"> Logs → span events</label>
       </div>
       <div class="ctl"><label>Trace sampling</label><input type="range" min="0" max="100" step="1" data-path="telemetry.sample_ratio" data-scale="100"><span><span data-show="telemetry.sample_ratio" data-scale="100"></span>%</span></div>
       <table style="margin-top:8px"><tbody id="dest"></tbody></table>
@@ -278,7 +319,7 @@ function serviceCard(svc) {
   const p = `services.${svc}`;
   const types = Object.entries(CAT.error_types).filter(([, m]) => !m.services || m.services.includes(svc));
   return `<div class="card" id="card-${svc}">
-    <div class="svc-title"><b>shopsim-${svc}</b><span class="pill" data-k="health">-</span><span class="pill plain" data-k="container">-</span>
+    <div class="svc-title"><b>shopsim-${svc}</b>${svc === "web" ? `<a class="link" style="font-size:12px" href="${location.protocol}//${location.hostname}:8184/" target="_blank" rel="noopener">storefront ↗</a>` : ""}<span class="pill" data-k="health">-</span><span class="pill plain" data-k="container">-</span>
       <span class="spacer"></span><span class="seg" data-k="state">${CAT.states.map(s => `<button data-state="${s}">${s[0].toUpperCase() + s.slice(1)}</button>`).join("")}</span></div>
     <div class="muted" data-k="effnote" style="font-size:12px;min-height:18px"></div>
     <div class="stats">
@@ -353,6 +394,54 @@ document.addEventListener("click", async e => {
   catch (err) { toast(err.message, "err"); }
 });
 
+// ---- storefront & RUM -----------------------------------------------------------------------
+function weightInputs(el, path, keys) {
+  $(el).innerHTML = keys.map(k => `<div><label>${esc(k.replace(/_/g, " "))}</label><input type="number" min="0" step="any" data-path="${path}.${k}"></div>`).join("");
+}
+function buildRum() {
+  $("#store-link").href = `${location.protocol}//${location.hostname}:8184/`;
+  $("#rum-sliders-shoppers").innerHTML = slider("rum.sessions_per_min", "Sessions/min", 0, 60, 0.5, 1, "/min")
+    + slider("rum.max_concurrent", "Browsers at once", 1, 8, 1, 1, "")
+    + slider("rum.think_time_ms", "Think time", 0, 10000, 100, 1, "ms");
+  $("#rum-sliders-faults").innerHTML = slider("rum.js_error_rate", "JS errors (of views)", 0, 100, 0.5, 100, "%")
+    + slider("rum.slow_render_ms", "Long task", 0, 5000, 50, 1, "ms")
+    + slider("rum.slow_render_rate", "Long task on", 0, 100, 1, 100, "%")
+    + slider("rum.lcp_delay_ms", "Late LCP", 0, 8000, 50, 1, "ms")
+    + slider("rum.layout_shift_rate", "Layout shift (of views)", 0, 100, 1, 100, "%")
+    + slider("rum.broken_asset_rate", "Broken images", 0, 100, 1, 100, "%")
+    + slider("rum.rage_click_rate", "Rage clicks (of sessions)", 0, 100, 1, 100, "%")
+    + slider("rum.api_latency_ms", "API latency", 0, 5000, 10, 1, "ms");
+  weightInputs("#rum-journeys", "rum.journeys", CAT.journeys);
+  weightInputs("#rum-devices", "rum.devices", CAT.devices);
+  weightInputs("#rum-errtypes", "rum.js_error_types", Object.keys(CAT.js_errors));
+  $$("#rum-errtypes > div").forEach((d, i) => d.title = Object.values(CAT.js_errors)[i]);
+}
+function renderRum() {
+  const r = ST.rum, sh = r.shoppers || {}, relay = r.relay || {}, fe = r.effective;
+  const stale = r.shoppers_age_s == null || r.shoppers_age_s > 20;
+  const set = (id, v) => { $(id).textContent = v ?? "-"; };
+  set("#rum-active", stale ? "-" : `${sh.active} / ${sh.cap}`);
+  set("#rum-started", sh.started); set("#rum-completed", sh.completed); set("#rum-failed", sh.failed);
+  set("#rum-skipped", sh.skipped); set("#rum-views", sh.views); set("#rum-beacons", relay.beacons);
+  set("#rum-promoted", relay.views_completed_by_relay != null ? relay.views_completed_by_relay + (relay.views_completed_by_sdk || 0) : "-");
+  $("#rum-failbox").classList.toggle("bad", (sh.failed || 0) > 0);
+  const notes = [];
+  if (stale) notes.push("shoppers not reporting (is the shopsim-shoppers container running?)");
+  else notes.push(`${fmt(fe.sessions_per_min, 2)} sessions/min target · ${esc(sh.browser || "")}`);
+  if (!relay.enabled) notes.push("RUM intake not configured: pages run without the SDK (set RUM_* in .env)");
+  if (fe.web_state !== "up") notes.push(`storefront is ${fe.web_state}`);
+  if (sh.last_error) notes.push(`last session error: ${esc(sh.last_error)}`);
+  $("#rum-note").innerHTML = notes.join(" · ");
+  $("#rum-chips").innerHTML = fe.active_spikes.map(a => `<span class="chip">${esc(a.name)} · ${dur(a.ends_at - ST.now)}</span>`).join("");
+  const top = obj => Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k)} ${v}`).join(" · ") || "-";
+  $("#rum-meta").innerHTML = [
+    ["RUM intake", relay.enabled ? `${esc(relay.intake)} · last HTTP ${relay.last_status ?? "-"} · ${relay.forward_errors || 0} forward errors · ${relay.pending_views ?? 0} open views` : "not configured"],
+    ["Events sent", top(relay.events_by_type)],
+    ["Journeys", top(sh.by_journey)], ["Devices", top(sh.by_device)], ["Countries", top(sh.by_country)],
+    ...(relay.last_error ? [["Relay error", esc(relay.last_error)]] : []),
+  ].map(([a, b]) => `<tr><td class="muted" style="width:120px">${a}</td><td>${b}</td></tr>`).join("");
+}
+
 // ---- traffic --------------------------------------------------------------------------------
 function buildTraffic() {
   $("#crud").innerHTML = CAT.methods.map(m => `<div class="ctl"><label>${m} <span class="muted" data-pct="crud-${m}"></span></label>
@@ -384,9 +473,16 @@ function buildSpikeForm() {
     cpu_burn: "Burns real CPU in the service container (cores, capped by SHOPSIM_MAX_BURN_CORES).", memory_burn: "Holds real memory (MB, capped by SHOPSIM_MAX_BURN_MB).",
     service_down: "Stops the container for the duration: port closed, no telemetry. Callers see connection refused.",
     service_degraded: "Container stays up but answers 503 to every request.",
+    rum_traffic: "Multiplies new shopper sessions per minute (still capped by browsers at once).",
+    js_errors: "Chance per page view (0-1) of a real JS error in the browser: uncaught TypeError, ReferenceError, unhandled rejection, custom error or console.error.",
+    slow_frontend: "Blocks the browser's main thread for this many ms on most views (long tasks, worse INP) and delays the main image (worse LCP).",
+    broken_assets: "Share (0-1) of product images that 404 (failed resources in RUM).",
   };
   const update = () => {
     const kind = f.kind.value, meta = CAT.spike_kinds[kind];
+    const frontend = meta.scope === "frontend";
+    if (frontend) f.target.value = "web";
+    f.target.disabled = frontend;
     const show = (n, on) => $(`[data-for="${n}"]`, f).style.display = on ? "" : "none";
     show("value", meta.unit !== null); show("metric", kind === "metric"); show("level", kind === "log_storm"); show("error_type", kind === "error_rate");
     show("start_in", f.start_mode.value === "in"); show("start_at", f.start_mode.value === "at");
@@ -403,7 +499,7 @@ function buildSpikeForm() {
   f.addEventListener("submit", async e => {
     e.preventDefault();
     const kind = f.kind.value, meta = CAT.spike_kinds[kind];
-    const spec = {kind, target: f.target.value, duration_s: Math.round(Number(f.duration.value) * Number(f.duration_unit.value))};
+    const spec = {kind, target: meta.scope === "frontend" ? "web" : f.target.value, duration_s: Math.round(Number(f.duration.value) * Number(f.duration_unit.value))};
     if (meta.unit !== null && f.value.value !== "") spec.value = Number(f.value.value);
     if (kind === "metric") spec.metric = f.metric.value;
     if (kind === "log_storm") spec.level = f.level.value;
@@ -452,6 +548,7 @@ function renderMeta() {
   $("#dest").innerHTML = [
     ["Traces", `OTLP/HTTP ${esc(m.otlp_traces_endpoint)}`], ["Metrics", `OTLP/HTTP ${esc(m.otlp_endpoint)}/v1/metrics`],
     ["Logs (syslog)", `UDP ${esc(m.syslog)}`],
+    ["RUM", ST.rum.relay.enabled ? `browser SDK → storefront /rum → ${esc(ST.rum.relay.intake)}` : "not configured"],
     ["Logs (files)", `${esc(m.log_dir)}/&lt;service&gt;.log`], ["Service down", m.docker ? "stops the container (real outage)" : `simulated: ${esc(m.docker_reason)}`],
     ["Burn caps", `${m.max_burn_cores} cores · ${m.max_burn_mb} MB per service`],
   ].map(([a, b]) => `<tr><td class="muted">${a}</td><td><code>${b}</code></td></tr>`).join("");
@@ -464,6 +561,7 @@ const DATA_COLS = {
   catalog: [["id", "ID"], ["sku", "SKU"], ["name", "Name"], ["category", "Category"], ["price", "Price"], ["stock", "Stock"], ["updated_at", "Updated"]],
   orders: [["id", "ID"], ["order_number", "Order"], ["customer_name", "Customer"], ["country", "Ctry"], ["item_count", "Items"], ["total", "Total"], ["status", "Status"], ["updated_at", "Updated"]],
   payments: [["id", "ID"], ["payment_ref", "Payment"], ["method", "Method"], ["amount", "Amount"], ["status", "Status"], ["decline_reason", "Decline"], ["updated_at", "Updated"]],
+  web: [["time", "Time"], ["session", "Session"], ["view", "RUM view"], ["loading_ms", "Load ms"], ["errors", "Errors"], ["actions", "Actions"], ["resources", "Resources"], ["completed", "Completed"]],
 };
 function buildData() {
   $("#data-tabs").innerHTML = CAT.services.map(s => `<button class="btn" data-tab="${s}">${s}</button>`).join("");
@@ -475,7 +573,8 @@ async function loadData() {
   $("#data-head").innerHTML = `<tr>${cols.map(c => `<th>${c[1]}</th>`).join("")}</tr>`;
   try {
     const rows = await api("GET", `/api/data/${dataTab}?limit=12`);
-    $("#data-body").innerHTML = rows.map(r => `<tr>${cols.map(([k]) => `<td>${esc(k === "updated_at" ? String(r[k]).slice(11, 19) : r[k])}</td>`).join("")}</tr>`).join("");
+    $("#data-body").innerHTML = rows.map(r => `<tr>${cols.map(([k]) => `<td>${esc(k === "updated_at" || k === "time" ? String(r[k]).slice(11, 19) : r[k])}</td>`).join("")}</tr>`).join("")
+      || `<tr><td colspan="${cols.length}" class="muted">nothing yet</td></tr>`;
   } catch (err) { $("#data-body").innerHTML = `<tr><td colspan="${cols.length}" class="muted">${esc(err.message)}</td></tr>`; }
 }
 
@@ -495,13 +594,13 @@ async function poll() {
   try {
     ST = await api("GET", "/api/status");
     $("#conn").className = "pill ok"; $("#conn").textContent = "live";
-    syncInputs(ST.config); renderServices(); renderTraffic(); renderSpikes(); renderMeta(); renderEvents();
+    syncInputs(ST.config); renderServices(); renderTraffic(); renderSpikes(); renderMeta(); renderEvents(); renderRum();
   } catch (err) { $("#conn").className = "pill err"; $("#conn").textContent = "disconnected"; }
 }
 (async function init() {
   CAT = await api("GET", "/api/catalogue");
   $("#services").innerHTML = CAT.services.map(serviceCard).join("");
-  buildTraffic(); buildSpikeForm(); buildPresets(); buildData();
+  buildTraffic(); buildSpikeForm(); buildPresets(); buildData(); buildRum();
   await poll(); loadData();
   setInterval(poll, 2000); setInterval(loadData, 10000);
 })().catch(err => toast(`Failed to load: ${err.message}`, "err"));

@@ -51,6 +51,8 @@ class ServiceContext:
     db: Database | None = None
     downstream: dict[str, Downstream] = field(default_factory=dict)
     state: dict = field(default_factory=dict)  # per-service caches (counts for gauges, ...)
+    # Faults, access logs and request metrics apply only under these path prefixes (None = all).
+    fault_paths: tuple[str, ...] | None = None
 
     @property
     def tracer(self):
@@ -62,28 +64,39 @@ class ServiceContext:
 
 
 def create_service_app(service: str, module, transports: dict[str, httpx.AsyncBaseTransport] | None = None) -> FastAPI:
-    """``module`` provides SCHEMA, PEERS, seed(ctx), setup(ctx) -> jobs, and router(ctx)."""
+    """``module`` provides SCHEMA, PEERS, seed(ctx), setup(ctx) -> jobs, and router(ctx).
+
+    Optional: FAULT_PATHS (prefixes faults apply to), EXCLUDED_URLS (not traced), tasks(ctx) ->
+    coroutine functions to run alongside the jobs, health(ctx) -> extra fields for /health.
+    """
     s = settings_mod.settings
     runtime = Runtime(service)
     telemetry = init_telemetry(service, runtime)
     logger = init_logging(service, runtime, telemetry)
-    ctx = ServiceContext(service, runtime, telemetry, logger, Metrics(telemetry.meter), FakeData())
+    ctx = ServiceContext(service, runtime, telemetry, logger, Metrics(telemetry.meter), FakeData(),
+                         fault_paths=getattr(module, "FAULT_PATHS", None))
     ctx.db = Database(ctx, os.path.join(s.data_dir, f"{service}.db"), module.SCHEMA)
     module.seed(ctx)
     for peer in module.PEERS:
         ctx.downstream[peer] = Downstream(ctx, peer, s.service_urls[peer], (transports or {}).get(peer))
     jobs = module.setup(ctx)
     background = Background(ctx, jobs)
+    extra_tasks: list[asyncio.Task] = []
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if settings_mod.settings.background:
             background.start()
+            extra_tasks.extend(asyncio.get_running_loop().create_task(fn()) for fn in
+                               (module.tasks(ctx) if hasattr(module, "tasks") else []))
         logger.info("%s %s started (traces %s, metrics %s, syslog %s:%s)", telemetry.service_name, VERSION,
                     s.otlp_traces_endpoint, s.otlp_endpoint, s.syslog_host, s.syslog_port,
                     extra={"fields": {"event": "service.started"}})
         yield
         logger.info("%s stopping", telemetry.service_name, extra={"fields": {"event": "service.stopping"}})
+        for task in extra_tasks:
+            task.cancel()
+        await asyncio.gather(*extra_tasks, return_exceptions=True)
         await background.stop()
         for client in ctx.downstream.values():
             await client.aclose()
@@ -93,7 +106,6 @@ def create_service_app(service: str, module, transports: dict[str, httpx.AsyncBa
     app.state.ctx = ctx
     app.state.background = background
     app.add_middleware(FaultMiddleware, ctx=ctx)
-    app.include_router(module.router(ctx))
 
     @app.get("/health", include_in_schema=False)
     async def health():
@@ -101,10 +113,16 @@ def create_service_app(service: str, module, transports: dict[str, httpx.AsyncBa
         body = {"status": "ok" if eff.state == "up" else eff.state, "service": telemetry.service_name,
                 "version": VERSION, "control_connected": runtime.connected,
                 "active_spikes": [sp["name"] for sp in eff.active_spikes]}
+        if hasattr(module, "health"):
+            body.update(module.health(ctx))
         return JSONResponse(body, status_code=200 if eff.state == "up" else 503)
+
+    # After /health: the storefront's router ends with a catch-all page route.
+    app.include_router(module.router(ctx))
 
     FastAPIInstrumentor.instrument_app(app, tracer_provider=telemetry.tracer_provider,
                                        meter_provider=telemetry.meter_provider,
-                                       excluded_urls="health,internal,docs,openapi.json",
+                                       excluded_urls=getattr(module, "EXCLUDED_URLS",
+                                                             "health,internal,docs,openapi.json"),
                                        exclude_spans=["receive", "send"])
     return app

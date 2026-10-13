@@ -69,6 +69,12 @@ _BUGS = {
         lambda: _decode_partner_payload(""),
         lambda: _format_price(310.0, "INR "),
     ],
+    "web": [
+        lambda: _pick_variant([{"sku": "A"}], 3),
+        lambda: _decode_partner_payload("<!doctype html><title>Maintenance</title>"),
+        lambda: _parse_quantity(""),
+        lambda: _apply_coupon({"id": 12, "coupon": None}),
+    ],
 }
 
 

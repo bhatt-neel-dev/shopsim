@@ -10,3 +10,4 @@ data/
 *.db
 *.db-wal
 *.db-shm
+shopsim/storefront/vendor/

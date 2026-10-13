@@ -1,5 +1,6 @@
-"""Continuous synthetic traffic: GET/POST/PUT/DELETE against the three services at the configured
-rate and CRUD ratio (times any active traffic spikes), plus live per-service stats."""
+"""Continuous synthetic traffic: GET/POST/PUT/DELETE against the services at the configured rate
+and CRUD ratio (times any active traffic spikes), plus live per-service stats. Requests for `web`
+go through the storefront's API (/api/<service>/...), like a mobile app's would."""
 from __future__ import annotations
 
 import asyncio
@@ -11,7 +12,7 @@ from collections import deque
 import httpx
 
 from shopsim.common.fakedata import CATEGORIES, FakeData
-from shopsim.config import SERVICES
+from shopsim.config import BACKENDS, SERVICES
 
 _TICK = 0.05
 _ORDER_STATUSES = {"processing": 30, "shipped": 35, "delivered": 25, "cancelled": 10}
@@ -211,6 +212,11 @@ class TrafficGenerator:
     def build(self, service: str, method: str) -> tuple[str, str, dict | None, dict | None]:
         """(http method, path, query params, json body) for one synthetic request."""
         rng = self.rng
+        if service == "web":
+            weights = self.store.config.traffic.service_weights
+            backend = rng.choices(BACKENDS, weights=[max(weights.get(b, 0), 0.01) for b in BACKENDS])[0]
+            http_method, path, params, body = self.build(backend, method)
+            return http_method, f"/api/{backend}{path}", params, body
         resource = {"catalog": "products", "orders": "orders", "payments": "payments"}[service]
         target = self._pick_id(service)
         if method in ("PUT", "DELETE") and target is None:

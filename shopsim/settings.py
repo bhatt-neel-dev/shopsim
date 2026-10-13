@@ -5,8 +5,8 @@ import os
 import socket
 from dataclasses import dataclass, field
 
-VERSION = "0.1.0"
-PORTS = {"control": 8180, "catalog": 8181, "orders": 8182, "payments": 8183}
+VERSION = "0.2.0"
+PORTS = {"control": 8180, "catalog": 8181, "orders": 8182, "payments": 8183, "web": 8184}
 
 
 def _env(name: str, default: str) -> str:
@@ -22,6 +22,7 @@ class Settings:
         "catalog": _env("SHOPSIM_CATALOG_URL", "http://127.0.0.1:8181"),
         "orders": _env("SHOPSIM_ORDERS_URL", "http://127.0.0.1:8182"),
         "payments": _env("SHOPSIM_PAYMENTS_URL", "http://127.0.0.1:8183"),
+        "web": _env("SHOPSIM_WEB_URL", "http://127.0.0.1:8184"),
     })
     otlp_endpoint: str = field(default_factory=lambda: _env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318"))
     # Full URL (OTel convention). Lets traces go to a different collector than metrics/logs.
@@ -43,6 +44,17 @@ class Settings:
     max_burn_cores: float = field(default_factory=lambda: float(_env("SHOPSIM_MAX_BURN_CORES", "2")))
     max_burn_mb: float = field(default_factory=lambda: float(_env("SHOPSIM_MAX_BURN_MB", "300")))
     poll_interval_s: float = field(default_factory=lambda: float(_env("SHOPSIM_POLL_INTERVAL_S", "2")))
+    # Storefront RUM: the values from the RUM application registered in Motadata. Without an
+    # intake URL the storefront still works, just without the RUM SDK.
+    rum_intake_url: str = field(default_factory=lambda: _env("RUM_INTAKE_URL", ""))
+    rum_application_id: str = field(default_factory=lambda: _env("RUM_APPLICATION_ID", ""))
+    rum_client_token: str = field(default_factory=lambda: _env("RUM_CLIENT_TOKEN", ""))
+    rum_service: str = field(default_factory=lambda: _env("RUM_SERVICE", "ShopSim Storefront"))
+    rum_version: str = field(default_factory=lambda: _env("RUM_VERSION", VERSION))
+    rum_verify_tls: bool = field(default_factory=lambda: _env("RUM_VERIFY_TLS", "false").lower() == "true")
+    # Shoppers: where they browse, and a hard cap on browsers at once (memory).
+    storefront_url: str = field(default_factory=lambda: _env("SHOPSIM_STOREFRONT_URL", "http://127.0.0.1:8184"))
+    max_shoppers: int = field(default_factory=lambda: int(_env("SHOPSIM_MAX_SHOPPERS", "3")))
     background: bool = field(default_factory=lambda: _env("SHOPSIM_BACKGROUND", "true").lower() == "true")
 
     def __post_init__(self):

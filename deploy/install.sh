@@ -20,7 +20,7 @@ if [ ! -f .env ]; then
   cp .env.example .env
   # Syslog from the host's primary IP so the receiver sees a real source address.
   ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  [ -n "$ip" ] && sed -i "s/^SYSLOG_HOST=.*/SYSLOG_HOST=$ip/" .env
+  [ -n "$ip" ] && sed -i "s/^SYSLOG_HOST=.*/SYSLOG_HOST=$ip/; s#^STOREFRONT_URL=.*#STOREFRONT_URL=http://$ip:8184#" .env
 fi
 
 log_dir="$(grep -E '^LOG_DIR=' .env | cut -d= -f2-)"
@@ -29,4 +29,6 @@ $SUDO mkdir -p "${log_dir:-/var/log/shopsim}"
 $SUDO docker compose up -d --build
 $SUDO docker compose ps
 echo
-echo "Control panel: http://$(hostname -I 2>/dev/null | awk '{print $1}'):8180"
+ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+echo "Control panel: http://$ip:8180"
+echo "Storefront:    http://$ip:8184"

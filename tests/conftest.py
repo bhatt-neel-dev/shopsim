@@ -30,14 +30,17 @@ def quiet(app) -> None:
 
 @pytest.fixture(scope="session")
 def shop():
-    """All three services wired together in-process (orders calls the others via ASGI)."""
+    """All four services wired together in-process (orders and web call the others via ASGI)."""
     from shopsim.services import create
 
     catalog = create("catalog")
     payments = create("payments")
     orders = create("orders", transports={"catalog": httpx.ASGITransport(app=catalog),
                                           "payments": httpx.ASGITransport(app=payments)})
-    apps = {"catalog": catalog, "orders": orders, "payments": payments}
+    web = create("web", transports={"catalog": httpx.ASGITransport(app=catalog),
+                                    "orders": httpx.ASGITransport(app=orders),
+                                    "payments": httpx.ASGITransport(app=payments)})
+    apps = {"catalog": catalog, "orders": orders, "payments": payments, "web": web}
     for app in apps.values():
         quiet(app)
     return apps

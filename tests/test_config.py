@@ -7,7 +7,7 @@ from shopsim.control.store import Store, deep_merge
 
 def test_defaults_are_valid_and_cover_every_service():
     cfg = default_config()
-    assert set(cfg.services) == {"catalog", "orders", "payments"}
+    assert set(cfg.services) == {"catalog", "orders", "payments", "web"}
     assert cfg.services["payments"].error_types["card_declined"] > 0
 
 

@@ -27,7 +27,8 @@ async def test_api_round_trip(shop):
         assert (await c.post("/api/presets/normal")).status_code == 200
         assert (await c.get("/api/effective/catalog")).json()["state"] == "up"
         status = (await c.get("/api/status")).json()
-        assert set(status["services"]) == {"catalog", "orders", "payments"}
+        assert set(status["services"]) == {"catalog", "orders", "payments", "web"}
+        assert status["rum"]["effective"]["sessions_per_min"] > 0
         assert status["meta"]["down_mode"] == "container"  # reconciler not running in tests
         assert (await c.get("/")).status_code == 200
 
@@ -59,7 +60,7 @@ async def test_generator_respects_crud_ratio_and_reaches_services(shop):
     assert gen.ids["catalog"] and gen.ids["orders"]
     # No catalog DELETE: the service tests rely on the seeded products 1-3 still existing.
     plan = {"catalog": ("GET", "POST", "PUT"), "orders": ("GET", "POST", "PUT", "DELETE"),
-            "payments": ("GET", "POST", "PUT", "DELETE")}
+            "payments": ("GET", "POST", "PUT", "DELETE"), "web": ("GET", "GET", "POST")}
     for service, methods in plan.items():
         for method in methods:
             await gen.fire(service, method)
@@ -75,9 +76,11 @@ def test_rates_follow_weights_multiplier_and_cap():
     from shopsim.control.traffic import TrafficGenerator
 
     store = Store()
-    store.patch_config({"traffic": {"rps": 100, "service_weights": {"catalog": 50, "orders": 50, "payments": 0}}})
-    gen = TrafficGenerator(store, {s: "http://x" for s in ("catalog", "orders", "payments")}, max_total_rps=300)
-    assert gen.rates() == {"catalog": 50, "orders": 50, "payments": 0}
+    store.patch_config({"traffic": {"rps": 100, "service_weights": {"catalog": 50, "orders": 50, "payments": 0,
+                                                                     "web": 0}}})
+    gen = TrafficGenerator(store, {s: "http://x" for s in ("catalog", "orders", "payments", "web")},
+                           max_total_rps=300)
+    assert gen.rates() == {"catalog": 50, "orders": 50, "payments": 0, "web": 0}
     store.add_spike(SpikeSpec(kind="traffic", target="orders", value=10, duration_s=60))
     rates = gen.rates()
     assert round(sum(rates.values())) == 300 and rates["orders"] > rates["catalog"] * 9
