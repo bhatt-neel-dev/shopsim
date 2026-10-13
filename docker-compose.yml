@@ -2,9 +2,10 @@ name: shopsim
 
 # Host networking: services reach each other, the OTLP endpoint and syslog on 127.0.0.1, and
 # the host name shows up as host.name on all telemetry.
+# One image for all four: `control` builds it, the services reuse it (never pulled).
 x-service: &service
-  build: .
   image: shopsim:latest
+  pull_policy: never
   network_mode: host
   restart: unless-stopped
   environment: &env
@@ -27,6 +28,8 @@ x-service: &service
 services:
   control:
     <<: *service
+    build: .
+    pull_policy: build
     container_name: shopsim-control
     command: ["control"]
     environment:
