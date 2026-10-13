@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShopSim Control</title>
+<style>
+:root {
+  --bg: #0e1116; --panel: #161b22; --panel2: #1c222b; --line: #2a313c; --text: #e6edf3; --muted: #8b949e;
+  --accent: #4f9cf9; --ok: #3fb950; --warn: #d29922; --err: #f85149; --info: #a371f7;
+  --radius: 10px; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f5f7fa; --panel: #ffffff; --panel2: #f0f3f7; --line: #d8dee6; --text: #1b2430; --muted: #5d6b7a;
+          --accent: #1f6feb; --ok: #1a7f37; --warn: #9a6700; --err: #cf222e; --info: #8250df; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center;
+         padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+header h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
+header h1 span { color: var(--muted); font-weight: 400; }
+main { padding: 16px 20px 40px; max-width: 1500px; margin: 0 auto; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+.grid3 { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid2 { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .grid3 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) { .grid2 { grid-template-columns: minmax(0, 1fr); } main { padding: 12px 16px 32px; } header { padding: 10px 16px; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; min-width: 0; }
+.card h2 { font-size: 14px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); font-weight: 600;
+           display: flex; align-items: center; gap: 8px; }
+.card h2 .right { margin-left: auto; text-transform: none; letter-spacing: 0; }
+.svc-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.svc-title b { font-size: 16px; }
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 99px; font-size: 12px;
+        border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.ok { color: var(--ok); } .pill.warn { color: var(--warn); } .pill.err { color: var(--err); } .pill.info { color: var(--info); }
+.pill.plain::before { display: none; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-right: 1px solid var(--line); background: transparent; color: var(--text); padding: 5px 10px; cursor: pointer; font: inherit; font-size: 13px; }
+.seg button:last-child { border-right: 0; }
+.seg button.on[data-state="up"] { background: var(--ok); color: #fff; }
+.seg button.on[data-state="degraded"] { background: var(--warn); color: #fff; }
+.seg button.on[data-state="down"] { background: var(--err); color: #fff; }
+.seg button.on[data-state="flapping"] { background: var(--info); color: #fff; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0 6px; }
+.stat { background: var(--panel2); border-radius: 8px; padding: 6px 8px; }
+.stat .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+.stat.bad .v { color: var(--err); }
+svg.spark { width: 100%; height: 48px; display: block; margin: 4px 0 8px; }
+.ctl { display: grid; grid-template-columns: 112px 1fr 76px; gap: 8px; align-items: center; margin: 6px 0; }
+.ctl label { color: var(--muted); font-size: 13px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+input[type=number], input[type=text], input[type=datetime-local], select, textarea {
+  width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; font-size: 13px; }
+textarea { font-family: var(--mono); font-size: 12px; min-height: 260px; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+button.btn { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; cursor: pointer; font: inherit; font-size: 13px; }
+button.btn:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger { color: var(--err); }
+details { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; }
+summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.sub { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin: 12px 0 4px; }
+.kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px 10px; }
+.kv label { display: block; font-size: 12px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 22px; }
+.chip { font-size: 12px; padding: 1px 8px; border-radius: 99px; background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.muted { color: var(--muted); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.form { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 12px; }
+.form label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; }
+td.num { font-variant-numeric: tabular-nums; }
+.table-wrap { overflow-x: auto; }
+.events { max-height: 340px; overflow: auto; font-size: 13px; }
+.events div { padding: 3px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 70px 1fr; gap: 8px; }
+.events time { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.lvl-warning { color: var(--warn); } .lvl-error { color: var(--err); }
+.preset { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+.tabs button.on { border-color: var(--accent); color: var(--accent); }
+.toggle { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+#toast { position: fixed; right: 16px; bottom: 16px; max-width: min(520px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 8px;
+         background: var(--panel); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(0,0,0,.3); display: none; z-index: 10; }
+#toast.err { border-color: var(--err); color: var(--err); } #toast.ok { border-color: var(--ok); }
+.hdr-stat { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 0; }
+@media (max-width: 600px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ctl { grid-template-columns: 84px minmax(0, 1fr) 84px; }
+  .preset { grid-template-columns: minmax(0, 1fr); gap: 4px; } .svc-title .spacer { display: none; } }
+.hdr-stat b { color: var(--text); }
+.spacer { flex: 1; }
+code { font-family: var(--mono); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ShopSim <span>control panel</span></h1>
+  <span id="conn" class="pill">connecting</span>
+  <label class="toggle"><input type="checkbox" data-path="traffic.enabled"> Traffic</label>
+  <span class="row">Base rps <input type="number" min="0" max="500" step="0.5" style="width:80px" data-path="traffic.rps"></span>
+  <span class="hdr-stat">target <b id="h-target">-</b> rps · actual <b id="h-actual">-</b> rps · in flight <b id="h-inflight">-</b></span>
+  <span class="spacer"></span>
+  <span class="hdr-stat" id="h-meta"></span>
+</header>
+
+<main>
+  <section class="grid3" id="services"></section>
+
+  <section class="grid2">
+    <div class="card">
+      <h2>Spikes &amp; schedules <span class="right"><button class="btn danger" id="cancel-all">Cancel all</button></span></h2>
+      <form id="spike-form" class="form" autocomplete="off">
+        <div><label>Kind</label><select name="kind"></select></div>
+        <div><label>Target</label><select name="target"><option value="all">all services</option><option value="random">random service</option>
+          <option value="catalog">catalog</option><option value="orders">orders</option><option value="payments">payments</option></select></div>
+        <div data-for="value"><label id="value-label">Value</label><input type="number" name="value" step="any"></div>
+        <div data-for="metric"><label>Metric</label><select name="metric"></select></div>
+        <div data-for="level"><label>Log level</label><select name="level"></select></div>
+        <div data-for="error_type"><label>Error type</label><select name="error_type"></select></div>
+        <div><label>Duration</label><div class="row" style="flex-wrap:nowrap"><input type="number" name="duration" value="2" min="0.1" step="any">
+          <select name="duration_unit" style="width:70px"><option value="60">min</option><option value="1">sec</option><option value="3600">hr</option></select></div></div>
+        <div><label>Start</label><select name="start_mode"><option value="now">now</option><option value="in">in N minutes</option><option value="at">at a time</option></select></div>
+        <div data-for="start_in"><label>Start in (min)</label><input type="number" name="start_in" value="5" min="0" step="any"></div>
+        <div data-for="start_at"><label>Start at</label><input type="datetime-local" name="start_at"></div>
+        <div><label>Repeat every (min)</label><input type="number" name="repeat" min="0" step="any" placeholder="no repeat"></div>
+        <div><label>Name (optional)</label><input type="text" name="name" maxlength="80"></div>
+        <div style="align-self:end"><button class="btn primary" type="submit">Fire spike</button></div>
+      </form>
+      <p class="muted" id="kind-help" style="margin:8px 0 4px;font-size:13px"></p>
+      <div class="table-wrap"><table><thead><tr><th>Status</th><th>Spike</th><th>Target</th><th>When</th><th>Repeat</th><th></th></tr></thead>
+        <tbody id="spikes"></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <h2>Traffic</h2>
+      <div class="ctl"><label>Base rps</label><input type="range" min="0" max="200" step="0.5" data-path="traffic.rps"><input type="number" min="0" max="500" step="0.5" data-path="traffic.rps"></div>
+      <div class="sub">CRUD ratio (weights)</div>
+      <div id="crud"></div>
+      <div class="sub">Share per service (weights)</div>
+      <div id="weights"></div>
+      <div class="kv" style="margin-top:8px">
+        <div><label>Max in flight</label><input type="number" min="1" max="5000" data-path="traffic.max_inflight"></div>
+        <div><label>Client timeout (s)</label><input type="number" min="1" max="120" data-path="traffic.request_timeout_s"></div>
+      </div>
+      <p class="muted" style="font-size:13px">Every service also emits background logs and runs periodic jobs, which produce their own traces, even with traffic off.</p>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="card">
+      <h2>Presets</h2>
+      <div id="presets"></div>
+    </div>
+    <div class="card">
+      <h2>Telemetry</h2>
+      <div class="kv" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+        <label class="toggle"><input type="checkbox" data-path="telemetry.traces"> Traces</label>
+        <label class="toggle"><input type="checkbox" data-path="telemetry.metrics"> Metrics</label>
+        <label class="toggle"><input type="checkbox" data-path="telemetry.logs_syslog"> Logs → syslog</label>
+        <label class="toggle"><input type="checkbox" data-path="telemetry.logs_file"> Logs → file</label>
+        <label class="toggle"><input type="checkbox" data-path="telemetry.logs_stdout"> Logs → stdout</label>
+        <label class="toggle"><input type="checkbox" data-path="telemetry.logs_otlp"> Logs → OTLP</label>
+      </div>
+      <div class="ctl"><label>Trace sampling</label><input type="range" min="0" max="100" step="1" data-path="telemetry.sample_ratio" data-scale="100"><span><span data-show="telemetry.sample_ratio" data-scale="100"></span>%</span></div>
+      <table style="margin-top:8px"><tbody id="dest"></tbody></table>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="card"><h2>Events</h2><div class="events" id="events"></div></div>
+    <div class="card">
+      <h2>Data <span class="right muted" style="font-size:12px">latest changes</span></h2>
+      <div class="tabs" id="data-tabs"></div>
+      <div class="table-wrap"><table><thead id="data-head"></thead><tbody id="data-body"></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Raw config (JSON): edit everything at once, or copy it for automation via <code>PUT /api/config</code></summary>
+      <textarea id="raw" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn" id="raw-load">Load current</button><button class="btn primary" id="raw-apply">Apply</button>
+        <button class="btn danger" id="raw-reset">Reset to defaults</button><span class="muted">API docs: <a href="/docs" style="color:var(--accent)">/docs</a></span></div>
+    </details>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+let CAT = null, ST = null, dataTab = "orders";
+const dirty = {}, pending = {};
+let patchTimer = null;
+
+async function api(method, path, body) {
+  const res = await fetch(path, {method, headers: body !== undefined ? {"content-type": "application/json"} : {},
+                                 body: body !== undefined ? JSON.stringify(body) : undefined});
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (!res.ok) throw new Error(errText(data) || `HTTP ${res.status}`);
+  return data;
+}
+function errText(d) {
+  if (!d) return "";
+  if (typeof d === "string") return d;
+  if (Array.isArray(d.detail)) return d.detail.map(e => `${(e.loc || []).filter(x => x !== "body").join(".")}: ${e.msg}`).join("; ");
+  return d.detail || d.message || JSON.stringify(d);
+}
+let toastTimer;
+function toast(msg, kind = "ok") {
+  const t = $("#toast"); t.textContent = msg; t.className = kind; t.style.display = "block";
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = "none", kind === "err" ? 7000 : 1800);
+}
+const getPath = (o, p) => p.split(".").reduce((a, k) => a == null ? undefined : a[k], o);
+function setPath(o, p, v) { const ks = p.split("."); let a = o; ks.slice(0, -1).forEach(k => a = (a[k] ??= {})); a[ks.at(-1)] = v; }
+const fmt = (v, d = 1) => v == null ? "-" : (+v).toFixed(d).replace(/\.0+$/, "");
+function dur(s) { s = Math.max(0, Math.round(s)); if (s < 60) return `${s}s`; if (s < 3600) return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+  return `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m`; }
+const hhmmss = ts => new Date(ts * 1000).toLocaleTimeString([], {hour12: false});
+
+// ---- generic data-path binding -------------------------------------------------------------
+function readInput(el) {
+  if (el.type === "checkbox") return el.checked;
+  if (el.tagName === "SELECT") return el.value;
+  if (el.value === "" && "nullable" in el.dataset) return null;
+  return Number(el.value) / Number(el.dataset.scale || 1);
+}
+function writeInput(el, v) {
+  if (el.type === "checkbox") { el.checked = !!v; return; }
+  if (el.tagName === "SELECT") { el.value = v; return; }
+  if (v === undefined || v === null) { el.value = ""; return; }
+  el.value = +(v * Number(el.dataset.scale || 1)).toFixed(4);
+}
+function showValue(path, v) {
+  $$(`[data-show="${path}"]`).forEach(s => s.textContent = v == null ? "-" : fmt(v * Number(s.dataset.scale || 1), 2));
+}
+document.addEventListener("input", e => {
+  const el = e.target, path = el.dataset && el.dataset.path;
+  if (!path) return;
+  if (el.type === "number" && el.value !== "" && !el.checkValidity()) return;
+  const v = readInput(el);
+  $$(`[data-path="${path}"]`).forEach(o => { if (o !== el) writeInput(o, v); });
+  showValue(path, v);
+  dirty[path] = Date.now();
+  setPath(pending, path, v);
+  clearTimeout(patchTimer); patchTimer = setTimeout(flush, 400);
+});
+async function flush() {
+  const body = structuredClone(pending);
+  for (const k of Object.keys(pending)) delete pending[k];
+  try { await api("PATCH", "/api/config", body); toast("Saved"); poll(); }
+  catch (err) { toast(err.message, "err"); }
+}
+function syncInputs(cfg) {
+  const now = Date.now();
+  $$("[data-path]").forEach(el => {
+    const p = el.dataset.path;
+    if (document.activeElement === el || now - (dirty[p] || 0) < 4000) return;
+    writeInput(el, getPath(cfg, p));
+  });
+  $$("[data-show]").forEach(s => { const p = s.dataset.show; if (now - (dirty[p] || 0) >= 4000) showValue(p, getPath(cfg, p)); });
+}
+
+// ---- service cards --------------------------------------------------------------------------
+function slider(path, label, min, max, step, scale = 1, unit = "") {
+  return `<div class="ctl"><label>${label}</label><input type="range" min="${min}" max="${max}" step="${step}" data-path="${path}" data-scale="${scale}">
+    <span class="row" style="flex-wrap:nowrap;gap:4px"><input type="number" min="${min}" max="${max}" step="any" data-path="${path}" data-scale="${scale}"><span class="muted">${unit}</span></span></div>`;
+}
+function serviceCard(svc) {
+  const p = `services.${svc}`;
+  const types = Object.entries(CAT.error_types).filter(([, m]) => !m.services || m.services.includes(svc));
+  return `<div class="card" id="card-${svc}">
+    <div class="svc-title"><b>shopsim-${svc}</b><span class="pill" data-k="health">-</span><span class="pill plain" data-k="container">-</span>
+      <span class="spacer"></span><span class="seg" data-k="state">${CAT.states.map(s => `<button data-state="${s}">${s[0].toUpperCase() + s.slice(1)}</button>`).join("")}</span></div>
+    <div class="muted" data-k="effnote" style="font-size:12px;min-height:18px"></div>
+    <div class="stats">
+      <div class="stat"><div class="v" data-k="rps">-</div><div class="l">rps <span data-k="trps"></span></div></div>
+      <div class="stat" data-k="errbox"><div class="v" data-k="err">-</div><div class="l">5xx / conn err</div></div>
+      <div class="stat"><div class="v" data-k="p95">-</div><div class="l">p95 ms</div></div>
+      <div class="stat"><div class="v" data-k="c4">-</div><div class="l">4xx</div></div>
+    </div>
+    <svg class="spark" data-k="spark" viewBox="0 0 240 48" preserveAspectRatio="none"></svg>
+    ${slider(`${p}.error_rate`, "Error rate", 0, 100, 0.5, 100, "%")}
+    ${slider(`${p}.latency_ms`, "Latency", 0, 5000, 5, 1, "ms")}
+    ${slider(`${p}.db_latency_ms`, "DB latency", 0, 3000, 1, 1, "ms")}
+    ${slider(`${p}.log_rate`, "Log lines/s", 0, 500, 1, 1, "/s")}
+    <div class="sub">Active spikes</div><div class="chips" data-k="chips"></div>
+    <details><summary>Advanced: per-method errors, error mix, logs, gauges, flapping</summary>
+      <div class="sub">Error rate per method (% · blank = use service rate)</div>
+      <div class="kv">${CAT.methods.map(m => `<div><label>${m}</label><input type="number" min="0" max="100" step="any" data-nullable data-scale="100" data-path="${p}.error_rate_by_method.${m}"></div>`).join("")}</div>
+      <div class="sub">Error type mix (weights)</div>
+      <div class="kv">${types.map(([t, m]) => `<div title="${esc(m.label)} · ${m.methods.join("/")}"><label>${t} <span class="muted">${m.status}</span></label><input type="number" min="0" step="any" data-path="${p}.error_types.${t}"></div>`).join("")}</div>
+      <div class="sub">Latency &amp; timeouts</div>
+      <div class="kv"><div><label>Jitter ms</label><input type="number" min="0" data-path="${p}.jitter_ms"></div>
+        <div><label>Timeout ms (timeout faults)</label><input type="number" min="100" data-path="${p}.timeout_ms"></div>
+        <div><label>Max rows kept</label><input type="number" min="100" data-path="${p}.max_rows"></div></div>
+      <div class="sub">Background log level mix (weights)</div>
+      <div class="kv">${CAT.levels.map(l => `<div><label>${l}</label><input type="number" min="0" step="any" data-path="${p}.log_levels.${l}"></div>`).join("")}
+        <label class="toggle"><input type="checkbox" data-path="${p}.request_logs"> Access logs</label></div>
+      <div class="sub">Simulated gauges (baseline)</div>
+      <div class="kv">${Object.entries(CAT.gauges).map(([g, m]) => `<div title="${m.metric}"><label>${esc(m.label)}</label><input type="number" min="0" max="${m.max}" step="any" data-path="${p}.gauges.${g}"></div>`).join("")}</div>
+      <div class="sub">Flapping</div>
+      <div class="kv"><div><label>Down for (s)</label><input type="number" min="5" max="3600" data-path="${p}.flap_down_s"></div>
+        <div><label>Up for (s)</label><input type="number" min="5" max="3600" data-path="${p}.flap_up_s"></div></div>
+    </details></div>`;
+}
+function spark(svg, series) {
+  if (!series.length) { svg.innerHTML = ""; return; }
+  const W = 240, H = 48, n = 120, x = i => W - (series.length - 1 - i) * (W / (n - 1));
+  const maxR = Math.max(1, ...series.map(p => p.rps));
+  const rps = series.map((p, i) => `${x(i).toFixed(1)},${(H - 3 - p.rps / maxR * (H - 8)).toFixed(1)}`).join(" ");
+  const bars = series.map((p, i) => p.err > 0 ? `<rect x="${(x(i) - 1).toFixed(1)}" y="${(H - p.err / 100 * H).toFixed(1)}" width="2" height="${(p.err / 100 * H).toFixed(1)}" fill="var(--err)" opacity=".7"/>` : "").join("");
+  svg.innerHTML = `${bars}<polyline points="${rps}" fill="none" stroke="var(--accent)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+    <text x="2" y="10" font-size="9" fill="var(--muted)">max ${fmt(maxR)} rps · red = error %</text>`;
+}
+function renderServices() {
+  for (const svc of CAT.services) {
+    const card = $(`#card-${svc}`), s = ST.services[svc], eff = s.effective, st = s.stats;
+    const k = key => $(`[data-k="${key}"]`, card);
+    const h = s.health, hc = h === "ok" ? "ok" : h === "unreachable" ? "err" : h === "unknown" ? "" : "warn";
+    k("health").className = `pill ${hc}`; k("health").textContent = h;
+    k("container").textContent = `container: ${s.container}`;
+    const cfgState = ST.config.services[svc].state;
+    $$("button", k("state")).forEach(b => b.classList.toggle("on", b.dataset.state === cfgState));
+    const notes = [];
+    if (eff.state !== cfgState && !(cfgState === "flapping")) notes.push(`effective: ${eff.state} (spike)`);
+    if (cfgState === "flapping") notes.push(`flapping, now ${eff.state}`);
+    if (eff.traffic_multiplier !== 1) notes.push(`traffic x${fmt(eff.traffic_multiplier, 2)}`);
+    if (eff.cpu_burn_cores) notes.push(`burning ${fmt(eff.cpu_burn_cores, 2)} cores`);
+    if (eff.memory_burn_mb) notes.push(`holding ${fmt(eff.memory_burn_mb, 0)} MB`);
+    if (eff.log_storms.length) notes.push(`log storm ${eff.log_storms.map(x => `${x.rate}/s ${x.level}`).join(" + ")}`);
+    k("effnote").textContent = notes.join(" · ");
+    k("rps").textContent = fmt(st.rps); k("trps").textContent = `/ ${fmt(s.target_rps)}`;
+    k("err").textContent = `${fmt(st.error_pct)}%`; k("errbox").classList.toggle("bad", st.error_pct > 0);
+    k("p95").textContent = fmt(st.p95_ms, 0); k("c4").textContent = `${fmt(st.client_error_pct)}%`;
+    spark(k("spark"), s.series);
+    k("chips").innerHTML = eff.active_spikes.length ? eff.active_spikes.map(a => `<span class="chip" title="${esc(a.kind)}">${esc(a.name)} · ${dur(a.ends_at - ST.now)}</span>`).join("") : `<span class="muted" style="font-size:12px">none</span>`;
+  }
+}
+document.addEventListener("click", async e => {
+  const b = e.target.closest(".seg button");
+  if (!b) return;
+  const svc = b.closest(".card").id.replace("card-", "");
+  try { await api("POST", `/api/services/${svc}/state`, {state: b.dataset.state}); toast(`${svc} → ${b.dataset.state}`); poll(); }
+  catch (err) { toast(err.message, "err"); }
+});
+
+// ---- traffic --------------------------------------------------------------------------------
+function buildTraffic() {
+  $("#crud").innerHTML = CAT.methods.map(m => `<div class="ctl"><label>${m} <span class="muted" data-pct="crud-${m}"></span></label>
+    <input type="range" min="0" max="100" step="1" data-path="traffic.crud_ratio.${m}"><input type="number" min="0" step="any" data-path="traffic.crud_ratio.${m}"></div>`).join("");
+  $("#weights").innerHTML = CAT.services.map(s => `<div class="ctl"><label>${s} <span class="muted" data-pct="w-${s}"></span></label>
+    <input type="range" min="0" max="100" step="1" data-path="traffic.service_weights.${s}"><input type="number" min="0" step="any" data-path="traffic.service_weights.${s}"></div>`).join("");
+}
+function renderTraffic() {
+  const t = ST.config.traffic;
+  const pct = (obj, key) => { const tot = Object.values(obj).reduce((a, b) => a + b, 0) || 1; return `${Math.round(100 * (obj[key] || 0) / tot)}%`; };
+  CAT.methods.forEach(m => $(`[data-pct="crud-${m}"]`).textContent = pct(t.crud_ratio, m));
+  CAT.services.forEach(s => $(`[data-pct="w-${s}"]`).textContent = pct(t.service_weights, s));
+  $("#h-target").textContent = fmt(ST.traffic.target_rps);
+  $("#h-actual").textContent = fmt(CAT.services.reduce((a, s) => a + ST.services[s].stats.rps, 0));
+  $("#h-inflight").textContent = ST.traffic.inflight + (ST.traffic.dropped ? ` (dropped ${ST.traffic.dropped})` : "");
+}
+
+// ---- spikes ---------------------------------------------------------------------------------
+function buildSpikeForm() {
+  const f = $("#spike-form");
+  f.kind.innerHTML = Object.entries(CAT.spike_kinds).map(([k, m]) => `<option value="${k}">${esc(m.label)}</option>`).join("");
+  f.metric.innerHTML = Object.entries(CAT.gauges).map(([g, m]) => `<option value="${g}">${esc(m.label)} (${m.metric})</option>`).join("");
+  f.level.innerHTML = CAT.levels.map(l => `<option ${l === "ERROR" ? "selected" : ""}>${l}</option>`).join("");
+  f.error_type.innerHTML = `<option value="">service's own mix</option>` + Object.entries(CAT.error_types).map(([t, m]) => `<option value="${t}">${t}: ${esc(m.label)}</option>`).join("");
+  const help = {
+    traffic: "Multiplies request rate for the target (x).", error_rate: "Error rate 0-1 for the target (e.g. 0.6 = 60% of requests fail). Optionally force one error type.",
+    latency: "Adds milliseconds to every request.", db_latency: "Adds milliseconds to every DB query (shows on DB spans).",
+    log_storm: "Extra log lines per second at the chosen level.", metric: "Drives a simulated gauge to this value.",
+    cpu_burn: "Burns real CPU in the service container (cores, capped by SHOPSIM_MAX_BURN_CORES).", memory_burn: "Holds real memory (MB, capped by SHOPSIM_MAX_BURN_MB).",
+    service_down: "Stops the container for the duration: port closed, no telemetry. Callers see connection refused.",
+    service_degraded: "Container stays up but answers 503 to every request.",
+  };
+  const update = () => {
+    const kind = f.kind.value, meta = CAT.spike_kinds[kind];
+    const show = (n, on) => $(`[data-for="${n}"]`, f).style.display = on ? "" : "none";
+    show("value", meta.unit !== null); show("metric", kind === "metric"); show("level", kind === "log_storm"); show("error_type", kind === "error_rate");
+    show("start_in", f.start_mode.value === "in"); show("start_at", f.start_mode.value === "at");
+    if (meta.unit !== null) {
+      const unit = kind === "metric" ? (CAT.gauges[f.metric.value] || {}).unit : meta.unit;
+      $("#value-label").textContent = `Value (${unit})`;
+      f.value.placeholder = kind === "metric" ? "95" : meta.default;
+    }
+    $("#kind-help").textContent = help[kind] || "";
+  };
+  f.kind.addEventListener("change", () => { f.value.value = ""; update(); });
+  f.metric.addEventListener("change", update); f.start_mode.addEventListener("change", update);
+  update();
+  f.addEventListener("submit", async e => {
+    e.preventDefault();
+    const kind = f.kind.value, meta = CAT.spike_kinds[kind];
+    const spec = {kind, target: f.target.value, duration_s: Math.round(Number(f.duration.value) * Number(f.duration_unit.value))};
+    if (meta.unit !== null && f.value.value !== "") spec.value = Number(f.value.value);
+    if (kind === "metric") spec.metric = f.metric.value;
+    if (kind === "log_storm") spec.level = f.level.value;
+    if (kind === "error_rate" && f.error_type.value) spec.error_type = f.error_type.value;
+    if (f.start_mode.value === "in") spec.start_in_s = Number(f.start_in.value) * 60;
+    if (f.start_mode.value === "at") { if (!f.start_at.value) return toast("Pick a start time", "err"); spec.start_at = new Date(f.start_at.value).getTime() / 1000; }
+    if (f.repeat.value) spec.repeat_every_s = Math.round(Number(f.repeat.value) * 60);
+    if (f.name.value.trim()) spec.name = f.name.value.trim();
+    try { const sp = await api("POST", "/api/spikes", spec); toast(`Spike ${sp.status}: ${sp.kind} on ${sp.target}`); poll(); }
+    catch (err) { toast(err.message, "err"); }
+  });
+  $("#cancel-all").addEventListener("click", async () => { try { const r = await api("POST", "/api/spikes/cancel-all"); toast(`Cancelled ${r.cancelled}`); poll(); } catch (err) { toast(err.message, "err"); } });
+}
+function renderSpikes() {
+  const pill = {active: "warn", scheduled: "info", done: "", cancelled: ""};
+  const rows = ST.spikes.slice(0, 40).map(sp => {
+    let when = "";
+    if (sp.status === "active") when = `ends in ${dur(sp.ends_at - ST.now)}`;
+    else if (sp.status === "scheduled") when = `starts in ${dur(sp.next_start - ST.now)}`;
+    else when = `ended ${dur(ST.now - (sp.ends_at || sp.created_at))} ago`;
+    const target = sp.target === "random" ? `random${sp.resolved_target ? ` → ${sp.resolved_target}` : ""}` : sp.target;
+    const repeat = sp.repeat_every_s ? `every ${dur(sp.repeat_every_s)} · run ${sp.runs}` : "";
+    const live = sp.status === "active" || sp.status === "scheduled";
+    return `<tr><td><span class="pill ${pill[sp.status]}">${sp.status}</span></td><td>${esc(sp.label)}<div class="muted" style="font-size:12px">${sp.kind} · ${dur(sp.duration_s)}</div></td>
+      <td>${esc(target)}</td><td class="num">${when}</td><td class="muted">${repeat}</td>
+      <td>${live ? `<button class="btn danger" data-cancel="${sp.id}">Cancel</button>` : ""}</td></tr>`;
+  });
+  $("#spikes").innerHTML = rows.join("") || `<tr><td colspan="6" class="muted">No spikes yet. Fire one above or apply a preset.</td></tr>`;
+}
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-cancel]");
+  if (!b) return;
+  try { await api("DELETE", `/api/spikes/${b.dataset.cancel}`); toast("Spike cancelled"); poll(); } catch (err) { toast(err.message, "err"); }
+});
+
+// ---- presets, telemetry, events, data -------------------------------------------------------
+function buildPresets() {
+  $("#presets").innerHTML = CAT.presets.map(p => `<div class="preset"><button class="btn" data-preset="${p.name}">${p.name.replace(/_/g, " ")}</button><span class="muted">${esc(p.description)}</span></div>`).join("");
+  $("#presets").addEventListener("click", async e => {
+    const b = e.target.closest("[data-preset]"); if (!b) return;
+    try { await api("POST", `/api/presets/${b.dataset.preset}`); toast(`Preset applied: ${b.dataset.preset}`); poll(); } catch (err) { toast(err.message, "err"); }
+  });
+}
+function renderMeta() {
+  const m = ST.meta;
+  $("#dest").innerHTML = [
+    ["Traces + metrics", `OTLP/HTTP ${esc(m.otlp_endpoint)}`], ["Logs (syslog)", `UDP ${esc(m.syslog)}`],
+    ["Logs (files)", `${esc(m.log_dir)}/&lt;service&gt;.log`], ["Service down", m.docker ? "stops the container (real outage)" : `simulated: ${esc(m.docker_reason)}`],
+    ["Burn caps", `${m.max_burn_cores} cores · ${m.max_burn_mb} MB per service`],
+  ].map(([a, b]) => `<tr><td class="muted">${a}</td><td><code>${b}</code></td></tr>`).join("");
+  $("#h-meta").textContent = `${m.hostname} · ${m.environment} · v${m.version}`;
+}
+function renderEvents() {
+  $("#events").innerHTML = ST.events.map(e => `<div><time>${hhmmss(e.ts)}</time><span class="lvl-${e.level}">${esc(e.message)}</span></div>`).join("");
+}
+const DATA_COLS = {
+  catalog: [["id", "ID"], ["sku", "SKU"], ["name", "Name"], ["category", "Category"], ["price", "Price"], ["stock", "Stock"], ["updated_at", "Updated"]],
+  orders: [["id", "ID"], ["order_number", "Order"], ["customer_name", "Customer"], ["country", "Ctry"], ["item_count", "Items"], ["total", "Total"], ["status", "Status"], ["updated_at", "Updated"]],
+  payments: [["id", "ID"], ["payment_ref", "Payment"], ["method", "Method"], ["amount", "Amount"], ["status", "Status"], ["decline_reason", "Decline"], ["updated_at", "Updated"]],
+};
+function buildData() {
+  $("#data-tabs").innerHTML = CAT.services.map(s => `<button class="btn" data-tab="${s}">${s}</button>`).join("");
+  $("#data-tabs").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (b) { dataTab = b.dataset.tab; loadData(); } });
+}
+async function loadData() {
+  $$("#data-tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === dataTab));
+  const cols = DATA_COLS[dataTab];
+  $("#data-head").innerHTML = `<tr>${cols.map(c => `<th>${c[1]}</th>`).join("")}</tr>`;
+  try {
+    const rows = await api("GET", `/api/data/${dataTab}?limit=12`);
+    $("#data-body").innerHTML = rows.map(r => `<tr>${cols.map(([k]) => `<td>${esc(k === "updated_at" ? String(r[k]).slice(11, 19) : r[k])}</td>`).join("")}</tr>`).join("");
+  } catch (err) { $("#data-body").innerHTML = `<tr><td colspan="${cols.length}" class="muted">${esc(err.message)}</td></tr>`; }
+}
+
+// ---- raw config -----------------------------------------------------------------------------
+$("#raw-load").addEventListener("click", () => { $("#raw").value = JSON.stringify(ST.config, null, 2); });
+$("#raw-apply").addEventListener("click", async () => {
+  let data; try { data = JSON.parse($("#raw").value); } catch (err) { return toast(`Invalid JSON: ${err.message}`, "err"); }
+  try { await api("PUT", "/api/config", data); toast("Config applied"); poll(); } catch (err) { toast(err.message, "err"); }
+});
+$("#raw-reset").addEventListener("click", async () => {
+  if (!confirm("Reset all settings to defaults? (Spikes are kept.)")) return;
+  try { await api("POST", "/api/config/reset"); toast("Config reset"); poll(); } catch (err) { toast(err.message, "err"); }
+});
+
+// ---- loop -----------------------------------------------------------------------------------
+async function poll() {
+  try {
+    ST = await api("GET", "/api/status");
+    $("#conn").className = "pill ok"; $("#conn").textContent = "live";
+    syncInputs(ST.config); renderServices(); renderTraffic(); renderSpikes(); renderMeta(); renderEvents();
+  } catch (err) { $("#conn").className = "pill err"; $("#conn").textContent = "disconnected"; }
+}
+(async function init() {
+  CAT = await api("GET", "/api/catalogue");
+  $("#services").innerHTML = CAT.services.map(serviceCard).join("");
+  buildTraffic(); buildSpikeForm(); buildPresets(); buildData();
+  await poll(); loadData();
+  setInterval(poll, 2000); setInterval(loadData, 10000);
+})().catch(err => toast(`Failed to load: ${err.message}`, "err"));
+</script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+name: shopsim
+
+# Host networking: services reach each other, the OTLP endpoint and syslog on 127.0.0.1, and
+# the host name shows up as host.name on all telemetry.
+x-service: &service
+  build: .
+  image: shopsim:latest
+  network_mode: host
+  restart: unless-stopped
+  environment: &env
+    OTEL_EXPORTER_OTLP_ENDPOINT: ${OTLP_ENDPOINT:-http://127.0.0.1:4318}
+    SHOPSIM_SYSLOG_HOST: ${SYSLOG_HOST:-127.0.0.1}
+    SHOPSIM_SYSLOG_PORT: ${SYSLOG_PORT:-514}
+    SHOPSIM_ENV: ${SHOPSIM_ENV:-lab}
+    SHOPSIM_MAX_TOTAL_RPS: ${SHOPSIM_MAX_TOTAL_RPS:-600}
+    SHOPSIM_MAX_BURN_CORES: ${SHOPSIM_MAX_BURN_CORES:-2}
+    SHOPSIM_MAX_BURN_MB: ${SHOPSIM_MAX_BURN_MB:-300}
+  volumes:
+    - shopsim-data:/data
+    - ${LOG_DIR:-/var/log/shopsim}:/var/log/shopsim
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+  mem_limit: 640m
+  cpus: 2.5
+
+services:
+  control:
+    <<: *service
+    container_name: shopsim-control
+    command: ["control"]
+    environment:
+      <<: *env
+      SHOPSIM_CONTROL_PASSWORD: ${SHOPSIM_CONTROL_PASSWORD:-}
+    volumes:
+      - shopsim-data:/data
+      # Lets the panel stop/start the three service containers for real outages.
+      - /var/run/docker.sock:/var/run/docker.sock
+    mem_limit: 384m
+    cpus: 1.5
+
+  catalog:
+    <<: *service
+    container_name: shopsim-catalog
+    command: ["catalog"]
+
+  orders:
+    <<: *service
+    container_name: shopsim-orders
+    command: ["orders"]
+
+  payments:
+    <<: *service
+    container_name: shopsim-payments
+    command: ["payments"]
+
+volumes:
+  shopsim-data:
