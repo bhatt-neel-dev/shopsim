@@ -234,6 +234,14 @@ class TelemetryConfig(BaseModel):
     # `log` event, so the trace view shows the logs that belong to it.
     log_span_events: bool = True
     sample_ratio: float = Field(1.0, ge=0, le=1)
+    # What goes over syslog, so a log backend is not swamped. Files and stdout always get
+    # everything. "text" is one short line (message + event + trace/span ids) that pattern
+    # detection can cluster; "json" is the full document. The defaults are deliberately gentle:
+    # full JSON with stack traces at every level made Motadata's log-pattern view run out of memory.
+    syslog_format: Literal["json", "text"] = "text"
+    syslog_min_level: Level = "INFO"
+    syslog_max_per_s: float = Field(25, ge=0, le=5000, description="Per service; 0 = no cap")
+    syslog_stack_traces: bool = False
 
 
 def _weights(v: dict, what: str) -> dict:

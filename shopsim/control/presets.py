@@ -6,8 +6,12 @@ from shopsim.config import SERVICES, SpikeSpec
 
 
 def _normal(store) -> None:
+    """Defaults for the shop, but keep the telemetry settings: where and how much data goes out
+    is a choice about the receiver, not part of a scenario."""
+    telemetry = store.config.telemetry.model_dump(mode="json")
     store.cancel_all()
     store.reset_config()
+    store.patch_config({"telemetry": telemetry})
 
 
 def _black_friday(store) -> None:
@@ -88,7 +92,8 @@ def _all_up(store) -> None:
 
 
 PRESETS = {
-    "normal": ("Healthy baseline: defaults restored, every spike cancelled, all services up", _normal),
+    "normal": ("Healthy baseline: defaults restored (telemetry settings kept), every spike cancelled, all "
+               "services up", _normal),
     "black_friday": ("15 min: traffic and shoppers x6, +250ms orders latency, CPU 88%, queue backlog, "
                      "15% card declines", _black_friday),
     "payment_outage": ("10 min: payments gateway timeouts at 80% + ERROR log storm", _payment_outage),

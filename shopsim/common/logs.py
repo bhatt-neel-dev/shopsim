@@ -95,15 +95,66 @@ class JsonFormatter(logging.Formatter):
 
 
 class SyslogFormatter(JsonFormatter):
-    """RFC 3164 header + JSON body. SysLogHandler adds the <PRI> prefix itself."""
+    """RFC 3164 header + body. SysLogHandler adds the <PRI> prefix itself.
 
-    def __init__(self, service_name: str):
+    The body is the JSON document, or (``syslog_format: text``) one short line:
+    ``LEVEL message | event=... trace_id=... span_id=... error.type=...``. Pattern detection in a log
+    backend clusters lines by their words; a short line with the ids at the end clusters well,
+    a JSON document with timestamps, ids and stack traces does not.
+    """
+
+    def __init__(self, service_name: str, runtime=None):
         super().__init__(service_name, max_stack=6000)
+        self.runtime = runtime
+
+    def _body(self, record: logging.LogRecord) -> str:
+        telemetry = self.runtime.eff.telemetry if self.runtime is not None else None
+        doc = self.to_dict(record)
+        if telemetry is not None and not telemetry.syslog_stack_traces:
+            doc.pop("error.stack_trace", None)
+        if telemetry is None or telemetry.syslog_format == "json":
+            return json.dumps(doc, default=str, separators=(",", ":"))
+        tail = [f"{key}={doc[key]}" for key in ("event", "trace_id", "span_id", "error.type", "http.response.status_code")
+                if doc.get(key) not in (None, "")]
+        message = " ".join(str(doc["message"]).split())[:500]
+        return f"{doc['level']} {message}" + (f" | {' '.join(tail)}" if tail else "")
 
     def format(self, record: logging.LogRecord) -> str:
         t = time.localtime(record.created)
         stamp = f"{_MONTHS[t.tm_mon - 1]} {t.tm_mday:>2} {t.tm_hour:02}:{t.tm_min:02}:{t.tm_sec:02}"
-        return f"{stamp} {self.host} {self.service_name}[{record.process}]: {super().format(record)}"
+        return f"{stamp} {self.host} {self.service_name}[{record.process}]: {self._body(record)}"
+
+
+_LEVELNO = {"DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARNING": logging.WARNING, "ERROR": logging.ERROR,
+            "CRITICAL": logging.CRITICAL}
+
+
+class SyslogGate(logging.Filter):
+    """Minimum level and a per-second cap for the syslog destination. Lines over the cap are
+    dropped (and counted), never queued: a slow or fragile receiver must not build a backlog."""
+
+    def __init__(self, runtime):
+        super().__init__()
+        self.runtime = runtime
+        self.tokens = 0.0
+        self.last = time.monotonic()
+        self.dropped = 0
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        telemetry = self.runtime.eff.telemetry
+        if record.levelno < _LEVELNO.get(telemetry.syslog_min_level, logging.DEBUG):
+            return False
+        cap = telemetry.syslog_max_per_s
+        if cap <= 0:
+            return True
+        now = time.monotonic()
+        self.tokens = min(cap, self.tokens + (now - self.last) * cap)
+        self.last = now
+        if self.tokens >= 1:
+            self.tokens -= 1
+            return True
+        self.dropped += 1
+        return False
 
 
 class SpanEventHandler(logging.Handler):
@@ -190,9 +241,12 @@ def init_logging(service: str, runtime, telemetry) -> logging.Logger:
     syslog = SysLogHandler(address=(s.syslog_host, s.syslog_port), facility=SysLogHandler.LOG_LOCAL0,
                            socktype=socket.SOCK_DGRAM)
     syslog.append_nul = False
-    syslog.setFormatter(SyslogFormatter(service_name))
+    syslog.setFormatter(SyslogFormatter(service_name, runtime))
     syslog.addFilter(ToggleFilter(runtime, "logs_syslog"))
+    gate = SyslogGate(runtime)
+    syslog.addFilter(gate)
     logger.addHandler(syslog)
+    logger.syslog_gate = gate  # /health reports its drop count
 
     span_events = SpanEventHandler()
     span_events.addFilter(ToggleFilter(runtime, "log_span_events"))

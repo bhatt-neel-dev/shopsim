@@ -88,7 +88,7 @@ All of it from the panel, or via the API (see `/docs` on port 8180):
 | Logs | background lines/s, level mix (DEBUG..CRITICAL), access logs on/off, destinations |
 | Gauges | baseline for every simulated resource gauge |
 | State | **Up** · **Degraded** (503s) · **Down** (container really stopped: port closed, no telemetry) · **Flapping** (down N s / up M s) |
-| Telemetry | traces / metrics / each log destination on/off, logs as span events, trace sampling ratio |
+| Telemetry | traces / metrics / each log destination on/off, logs as span events, trace sampling ratio, syslog format / minimum level / lines-per-second cap / stack traces |
 | Shoppers | on/off, sessions per minute, browsers at once, think time, journey mix, device mix, spread over countries |
 | Frontend faults | JS error rate and type mix, long tasks (ms and share of views), late LCP, layout shifts, broken images, rage clicks, storefront API latency |
 
@@ -166,7 +166,7 @@ chromium`, then `python -m shopsim shoppers`. To get the RUM SDK for the storefr
 Set `SHOPSIM_DATA_DIR`/`SHOPSIM_LOG_DIR` to writable paths. Without a Docker socket, "down" is
 simulated: the service answers 503 and stops all telemetry.
 
-Tests: `pytest` (41 tests, in-process, no network).
+Tests: `pytest` (46 tests, in-process, no network).
 
 ### Seeing traces and logs in Motadata
 
@@ -181,9 +181,25 @@ register them through the API, send every field the UI sends: `service.deploymen
 `OTEL_RESOURCE_ATTRIBUTES=trace.business.service=<name>` in `.env` to group the three services
 under a business service.
 
-Logs arrive as syslog (UDP 514). Motadata stores them only from a registered log source: add the
-ShopSim host's IP as a TCP/UDP log source (Settings → Log → Log Ingestion), with a JSON parser so
-`trace_id`, `service`, `level`, `event` become searchable fields.
+Logs arrive as syslog (UDP 514). Motadata 8.2.9 created a UDP log source for the sending host by
+itself; if yours does not, add the host's IP under Settings → Log → Log Ingestion.
+
+### Forwarding logs without overloading the receiver
+
+Files and stdout always get every line. What goes over **syslog** is shaped in the panel
+(Telemetry → Syslog shaping), with gentle defaults:
+
+| Setting | Default | Why |
+|---|---|---|
+| Format | `text` | One short line, `LEVEL message \| event=... trace_id=... span_id=...`, about a third of the JSON size. Log-pattern detection clusters it easily, and you can still find a trace's logs by searching for its `trace_id`. `json` sends the full document. |
+| Minimum level | `INFO` | DEBUG chatter stays in the files. |
+| Max lines/s per service | `25` | Lines over the cap are dropped and counted, never queued, so a log storm or a traffic spike cannot flood the receiver. `0` = no cap. |
+| Stack traces | off | Stack traces still reach the trace view (span exceptions) and the files. |
+
+The *normal* preset keeps these settings. In our lab, Motadata 8.2.9's Log Explorer **Patterns** view,
+run over a whole day of full-JSON logs, pushed its pattern process (`go-log-pattern`) to 8.4 GB within 30
+seconds and the kernel stopped `motadata.service`. Taking in the logs was fine. Run pattern views over
+short, filtered time ranges.
 
 ## Settings (environment)
 

@@ -247,6 +247,8 @@ def create_app(transports: dict[str, httpx.AsyncBaseTransport] | None = None) ->
             eff = store.effective(svc, now)
             services[svc] = {
                 "health": health[svc]["status"], "container": docker.states.get(svc, "unknown"),
+                "syslog_dropped": (health[svc]["detail"].get("syslog_dropped", 0)
+                                   if isinstance(health[svc]["detail"], dict) else 0),
                 "effective": {k: getattr(eff, k) for k in (
                     "state", "error_rate", "forced_error_type", "latency_ms", "db_latency_ms", "log_rate",
                     "log_storms", "cpu_burn_cores", "memory_burn_mb", "traffic_multiplier", "spiked_gauges",

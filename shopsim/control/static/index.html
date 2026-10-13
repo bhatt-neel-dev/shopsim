@@ -207,6 +207,14 @@ code { font-family: var(--mono); font-size: 12px; }
         <label class="toggle" title="Each request's log lines are added to its span as 'log' events, so they show inside the trace"><input type="checkbox" data-path="telemetry.log_span_events"> Logs → span events</label>
       </div>
       <div class="ctl"><label>Trace sampling</label><input type="range" min="0" max="100" step="1" data-path="telemetry.sample_ratio" data-scale="100"><span><span data-show="telemetry.sample_ratio" data-scale="100"></span>%</span></div>
+      <div class="sub">Syslog shaping (protects the log receiver; files and stdout still get everything)</div>
+      <div class="kv" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr))">
+        <div><label>Format</label><select data-path="telemetry.syslog_format"><option value="json">JSON (full)</option><option value="text">Text (short, pattern-friendly)</option></select></div>
+        <div><label>Minimum level</label><select data-path="telemetry.syslog_min_level"><option>DEBUG</option><option>INFO</option><option>WARNING</option><option>ERROR</option><option>CRITICAL</option></select></div>
+        <div><label>Max lines/s per service (0 = no cap)</label><input type="number" min="0" max="5000" step="any" data-path="telemetry.syslog_max_per_s"></div>
+        <label class="toggle"><input type="checkbox" data-path="telemetry.syslog_stack_traces"> Stack traces</label>
+      </div>
+      <div class="muted" id="syslog-dropped" style="font-size:12px;margin-top:4px"></div>
       <table style="margin-top:8px"><tbody id="dest"></tbody></table>
     </div>
   </section>
@@ -553,6 +561,8 @@ function renderMeta() {
     ["Burn caps", `${m.max_burn_cores} cores · ${m.max_burn_mb} MB per service`],
   ].map(([a, b]) => `<tr><td class="muted">${a}</td><td><code>${b}</code></td></tr>`).join("");
   $("#h-meta").textContent = `${m.hostname} · ${m.environment} · v${m.version}`;
+  const dropped = CAT.services.map(s => [s, ST.services[s].syslog_dropped || 0]).filter(([, n]) => n > 0);
+  $("#syslog-dropped").textContent = dropped.length ? `Dropped by the cap since start: ${dropped.map(([s, n]) => `${s} ${n}`).join(" · ")}` : "";
 }
 function renderEvents() {
   $("#events").innerHTML = ST.events.map(e => `<div><time>${hhmmss(e.ts)}</time><span class="lvl-${e.level}">${esc(e.message)}</span></div>`).join("");

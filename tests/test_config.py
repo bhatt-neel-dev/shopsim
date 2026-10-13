@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from shopsim.config import Spike, SpikeSpec, compute_effective, default_config
+from shopsim.config import SERVICES, Spike, SpikeSpec, compute_effective, default_config
 from shopsim.control.store import Store, deep_merge
 
 
@@ -117,6 +117,6 @@ def test_spike_lifecycle_schedule_activate_end_repeat(tmp_path):
 def test_random_target_resolves_on_each_run(tmp_path):
     store = Store(tmp_path / "c.json")
     spike = store.add_spike(SpikeSpec(kind="error_rate", target="random", value=0.9, duration_s=10), now=0)
-    assert spike.resolved_target in ("catalog", "orders", "payments")
+    assert spike.resolved_target in SERVICES
     hit = store.effective(spike.resolved_target, now=1)
     assert hit.error_rate == 0.9

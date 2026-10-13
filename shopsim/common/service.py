@@ -112,7 +112,8 @@ def create_service_app(service: str, module, transports: dict[str, httpx.AsyncBa
         eff = runtime.eff
         body = {"status": "ok" if eff.state == "up" else eff.state, "service": telemetry.service_name,
                 "version": VERSION, "control_connected": runtime.connected,
-                "active_spikes": [sp["name"] for sp in eff.active_spikes]}
+                "active_spikes": [sp["name"] for sp in eff.active_spikes],
+                "syslog_dropped": getattr(getattr(logger, "syslog_gate", None), "dropped", 0)}
         if hasattr(module, "health"):
             body.update(module.health(ctx))
         return JSONResponse(body, status_code=200 if eff.state == "up" else 503)
