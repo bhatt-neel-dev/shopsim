@@ -66,11 +66,17 @@ class Database:
 
             cur = None
             for attempt in range(DB_LOCK_RETRIES + 1):
+                injected = faults.current_injection()
                 try:
                     await faults.checkpoint(ctx, "db")
                     cur = self.conn.execute(sql, params)
                     break
                 except sqlite3.OperationalError as exc:
+                    # An injected db_lock is a deliberate one-shot fault used by the
+                    # simulator and must remain observable. Only retry locks reported by
+                    # SQLite itself after the fault checkpoint has passed.
+                    if injected is not None and injected.type == "db_lock":
+                        raise
                     locked = "locked" in str(exc).lower()
                     if not locked or attempt == DB_LOCK_RETRIES:
                         raise
