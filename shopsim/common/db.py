@@ -12,6 +12,10 @@ from opentelemetry.trace import SpanKind
 from shopsim.common import faults
 
 
+DB_LOCK_RETRIES = 3
+DB_LOCK_BACKOFF_SECONDS = 0.05
+
+
 @dataclass
 class Result:
     rows: list[dict] = field(default_factory=list)
@@ -59,8 +63,27 @@ class Database:
             delay = faults.jitter_ms(eff.db_latency_ms, eff.db_latency_ms * 0.3)
             if delay:
                 await asyncio.sleep(delay / 1000)
-            await faults.checkpoint(ctx, "db")
-            cur = self.conn.execute(sql, params)
+
+            cur = None
+            for attempt in range(DB_LOCK_RETRIES + 1):
+                try:
+                    await faults.checkpoint(ctx, "db")
+                    cur = self.conn.execute(sql, params)
+                    break
+                except sqlite3.OperationalError as exc:
+                    locked = "locked" in str(exc).lower()
+                    if not locked or attempt == DB_LOCK_RETRIES:
+                        raise
+                    backoff = DB_LOCK_BACKOFF_SECONDS * (2 ** attempt)
+                    ctx.logger.warning(
+                        "SQLite database locked; retrying %s %s (attempt %d/%d)",
+                        op, table, attempt + 1, DB_LOCK_RETRIES,
+                        extra={"fields": {"event": "db.lock_retry", "db.operation.name": op,
+                                           "db.collection.name": table, "retry.attempt": attempt + 1}},
+                    )
+                    await asyncio.sleep(backoff)
+
+            assert cur is not None
             rows = [dict(r) for r in cur.fetchall()] if cur.description else []
             result = Result(rows, cur.rowcount, cur.lastrowid)
             span.set_attribute("db.response.returned_rows", len(rows))

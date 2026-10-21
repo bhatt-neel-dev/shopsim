@@ -50,6 +50,16 @@ async def test_checkout_is_one_trace_across_three_services(shop):
     assert any(s.context.trace_id == trace_id and s.name == "gateway.authorize" for s in spans(shop["payments"]))
 
 
+async def test_checkout_retries_transient_db_lock(shop):
+    await restock(shop)
+    eff = shop["orders"].state.ctx.runtime.eff
+    eff.error_rate, eff.error_types = 1.0, {"db_lock": 1}
+    async with client(shop["orders"]) as o:
+        resp = await o.post("/orders", json=ORDER)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["status"] == "paid"
+
+
 async def test_order_update_cancel_refunds_and_delete(shop):
     await restock(shop)
     async with client(shop["orders"]) as o:
