@@ -23,15 +23,36 @@ class Result:
 
 
 class Database:
+    # SQLite can briefly reject a writer while another request commits. Retry only
+    # this transient condition; other OperationalErrors must still fail loudly.
+    LOCK_RETRIES = 3
+    LOCK_RETRY_DELAY_SECONDS = 0.05
+
     def __init__(self, ctx, path: str, schema: str):
         self.ctx = ctx
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         self.name = os.path.basename(path)
-        self.conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None, timeout=5)
+        self.conn = sqlite3.connect(
+            path, check_same_thread=False, isolation_level=None, timeout=5
+        )
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.executescript(schema)
+
+    @staticmethod
+    def _is_locked(exc: sqlite3.OperationalError) -> bool:
+        return "locked" in str(exc).lower()
+
+    async def _execute_with_retry(self, sql: str, params: tuple | list = ()):
+        for attempt in range(self.LOCK_RETRIES + 1):
+            try:
+                return self.conn.execute(sql, params)
+            except sqlite3.OperationalError as exc:
+                if not self._is_locked(exc) or attempt == self.LOCK_RETRIES:
+                    raise
+                await asyncio.sleep(self.LOCK_RETRY_DELAY_SECONDS * (attempt + 1))
 
     def execute_sync(self, sql: str, params: tuple | list = ()) -> Result:
         """Untraced, for seeding and internal endpoints."""
@@ -43,38 +64,68 @@ class Database:
         with self.conn:
             self.conn.executemany(sql, seq)
 
-    async def query(self, sql: str, params: tuple | list = (), *, table: str, op: str | None = None) -> Result:
+    async def query(
+        self,
+        sql: str,
+        params: tuple | list = (),
+        *,
+        table: str,
+        op: str | None = None,
+    ) -> Result:
         ctx = self.ctx
         op = op or sql.lstrip().split(None, 1)[0].upper()
         statement = " ".join(sql.split())
-        with ctx.tracer.start_as_current_span(f"{op} {table}", kind=SpanKind.CLIENT, attributes={
-            "db.system": "sqlite", "db.system.name": "sqlite",
-            "db.name": self.name, "db.namespace": self.name,
-            "db.statement": statement, "db.query.text": statement,
-            "db.operation": op, "db.operation.name": op,
-            "db.sql.table": table, "db.collection.name": table,
-        }) as span:
+        with ctx.tracer.start_as_current_span(
+            f"{op} {table}",
+            kind=SpanKind.CLIENT,
+            attributes={
+                "db.system": "sqlite",
+                "db.system.name": "sqlite",
+                "db.name": self.name,
+                "db.namespace": self.name,
+                "db.statement": statement,
+                "db.query.text": statement,
+                "db.operation": op,
+                "db.operation.name": op,
+                "db.sql.table": table,
+                "db.collection.name": table,
+            },
+        ) as span:
             started = time.perf_counter()
             eff = ctx.runtime.eff
             delay = faults.jitter_ms(eff.db_latency_ms, eff.db_latency_ms * 0.3)
             if delay:
                 await asyncio.sleep(delay / 1000)
             await faults.checkpoint(ctx, "db")
-            cur = self.conn.execute(sql, params)
+            cur = await self._execute_with_retry(sql, params)
             rows = [dict(r) for r in cur.fetchall()] if cur.description else []
             result = Result(rows, cur.rowcount, cur.lastrowid)
             span.set_attribute("db.response.returned_rows", len(rows))
             if cur.rowcount >= 0:
                 span.set_attribute("db.response.affected_rows", cur.rowcount)
             elapsed = (time.perf_counter() - started) * 1000
-            ctx.metrics.db_duration.record(elapsed, {"db.operation.name": op, "db.collection.name": table})
+            ctx.metrics.db_duration.record(
+                elapsed, {"db.operation.name": op, "db.collection.name": table}
+            )
             if elapsed > 500:
-                ctx.logger.warning("Slow query (%.0fms) on %s: %s", elapsed, table, statement[:200],
-                                   extra={"fields": {"event": "db.slow_query", "duration_ms": round(elapsed, 1),
-                                                     "db.collection.name": table}})
+                ctx.logger.warning(
+                    "Slow query (%.0fms) on %s: %s",
+                    elapsed,
+                    table,
+                    statement[:200],
+                    extra={
+                        "fields": {
+                            "event": "db.slow_query",
+                            "duration_ms": round(elapsed, 1),
+                            "db.collection.name": table,
+                        }
+                    },
+                )
             return result
 
     def prune(self, table: str, keep: int) -> int:
         cur = self.conn.execute(
-            f"DELETE FROM {table} WHERE id NOT IN (SELECT id FROM {table} ORDER BY id DESC LIMIT ?)", (keep,))
+            f"DELETE FROM {table} WHERE id NOT IN (SELECT id FROM {table} ORDER BY id DESC LIMIT ?)",
+            (keep,),
+        )
         return cur.rowcount
