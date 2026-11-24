@@ -1,5 +1,7 @@
-"""Genuinely broken code paths. The 'exception' fault runs one of these so traces and logs carry
-real Python stack traces (KeyError, ZeroDivisionError, ...) rather than a synthetic message.
+"""Business-rule helpers used by the runtime exception fault injection.
+
+The exception fault intentionally exercises these helpers, but malformed optional values
+must not turn a normal order request into an unhandled runtime exception.
 """
 from __future__ import annotations
 
@@ -10,42 +12,59 @@ import random
 
 def _resolve_tax_rate(region: str) -> float:
     rates = {"US-CA": 0.0725, "US-NY": 0.04, "IN-MH": 0.18, "GB-LND": 0.20}
-    return rates[region]
+    return rates.get(region, 0.0)
 
 
 def _split_shipment(items: list, warehouses: list) -> int:
-    per_warehouse = len(items) // len(warehouses)
-    return per_warehouse
+    if not warehouses:
+        return 0
+    return len(items) // len(warehouses)
 
 
 def _parse_quantity(raw: str) -> int:
-    return int(raw)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _format_price(amount: float, currency: str) -> str:
-    return currency + amount
+    return f"{currency}{amount:.2f}"
 
 
 def _apply_coupon(order: dict) -> str:
     coupon = order.get("coupon")
-    return coupon.code.upper()
+    if coupon is None:
+        return ""
+    if isinstance(coupon, dict):
+        code = coupon.get("code")
+    else:
+        code = getattr(coupon, "code", coupon)
+    return str(code).upper() if code is not None else ""
 
 
 def _pick_variant(variants: list, index: int) -> dict:
+    if not variants or index < 0 or index >= len(variants):
+        return {}
     return variants[index]
 
 
 def _risk_model_score(features: dict) -> float:
-    return math.log(features["velocity"]) * features["weight"]
+    velocity = max(float(features.get("velocity", 0)), 1.0)
+    return math.log(velocity) * float(features.get("weight", 0))
 
 
 def _decode_partner_payload(payload: str) -> dict:
-    return json.loads(payload)
+    try:
+        value = json.loads(payload)
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 def _fx_rate(pair: str) -> float:
     table = {"USD/EUR": 0.92, "USD/INR": 83.1, "USD/GBP": 0.79}
-    return table[pair]
+    return table.get(pair, 1.0)
 
 
 _BUGS = {
